@@ -73,6 +73,40 @@ async def get_status_checks():
 # Yahoo Finance proxy — mirrors the Netlify Function so the preview URL works end-to-end.
 _YF_SYMBOL_RE = re.compile(r"^[A-Z0-9.\-^=]{1,20}$", re.IGNORECASE)
 
+# Cache the Yahoo crumb (lasts ~30 min) so we don't handshake every request.
+_CRUMB_CACHE = {"crumb": None, "cookies": None, "ts": 0}
+
+
+async def _get_crumb():
+    import time
+    if _CRUMB_CACHE["crumb"] and time.time() - _CRUMB_CACHE["ts"] < 1500:
+        return _CRUMB_CACHE["crumb"], _CRUMB_CACHE["cookies"]
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    import urllib.parse
+    # Try direct first, fall back to allorigins for cookie/crumb fetch
+    for direct in (True, False):
+        try:
+            async with httpx.AsyncClient(timeout=14, follow_redirects=True,
+                                         headers={"User-Agent": ua}) as c:
+                if direct:
+                    await c.get("https://fc.yahoo.com")
+                    r = await c.get("https://query2.finance.yahoo.com/v1/test/getcrumb")
+                else:
+                    await c.get("https://api.allorigins.win/raw?url="
+                                + urllib.parse.quote("https://fc.yahoo.com", safe=""))
+                    r = await c.get("https://api.allorigins.win/raw?url="
+                                    + urllib.parse.quote("https://query2.finance.yahoo.com/v1/test/getcrumb", safe=""))
+                crumb = r.text.strip() if r.status_code == 200 else None
+                if crumb and len(crumb) < 30 and not crumb.startswith("{"):
+                    _CRUMB_CACHE["crumb"] = crumb
+                    _CRUMB_CACHE["cookies"] = dict(c.cookies)
+                    _CRUMB_CACHE["ts"] = time.time()
+                    return crumb, dict(c.cookies)
+        except Exception:
+            pass
+    return None, {}
+
 
 async def _try_fetch(url: str, headers: dict, timeout: float):
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
@@ -127,6 +161,64 @@ async def yahoo_proxy(
         except Exception as e:
             last_err = e
     raise HTTPException(status_code=502, detail=f"All fetch strategies failed: {last_err}")
+
+
+@api_router.get("/yahoo/search")
+async def yahoo_search(q: str = Query(..., min_length=1, max_length=40)):
+    """Search any NSE/BSE/global stock by name or ticker."""
+    import urllib.parse
+    target = (
+        "https://query2.finance.yahoo.com/v1/finance/search"
+        f"?q={urllib.parse.quote(q)}&lang=en-US&region=IN&quotesCount=12&newsCount=0"
+    )
+    proxy = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(target, safe="")
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    for url, h, t in [(target, {"User-Agent": ua}, 8.0),
+                       (proxy, {}, 15.0),
+                       (target, {"User-Agent": ua}, 8.0)]:
+        try:
+            async with httpx.AsyncClient(timeout=t, follow_redirects=True) as c:
+                r = await c.get(url, headers=h)
+            if r.status_code == 200 and b'"quotes"' in r.content[:128]:
+                return Response(content=r.content, media_type="application/json",
+                                headers={"Cache-Control": "public, max-age=300"})
+        except Exception:
+            pass
+    raise HTTPException(status_code=502, detail="search failed")
+
+
+@api_router.get("/yahoo/quote")
+async def yahoo_quote(symbol: str = Query(...)):
+    """Live fundamentals — P/E, EPS, ROE, market cap, margins, etc."""
+    if not _YF_SYMBOL_RE.match(symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol")
+    crumb, cookies = await _get_crumb()
+    if not crumb:
+        raise HTTPException(status_code=502, detail="Could not get Yahoo crumb")
+    modules = ("summaryDetail,defaultKeyStatistics,financialData,assetProfile,price,"
+               "earnings,incomeStatementHistory,balanceSheetHistory")
+    base = (f"https://query2.finance.yahoo.com/v10/finance/quoteSummary/{symbol}"
+            f"?modules={modules}&crumb={crumb}")
+    ua = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+          "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+    import urllib.parse
+    fallback = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(base, safe="")
+    last_err = None
+    for url in (base, fallback, base, fallback):
+        try:
+            async with httpx.AsyncClient(timeout=16, follow_redirects=True,
+                                         headers={"User-Agent": ua}, cookies=cookies) as c:
+                r = await c.get(url)
+            if r.status_code == 200 and b'"quoteSummary"' in r.content[:64]:
+                return Response(content=r.content, media_type="application/json",
+                                headers={"Cache-Control": "public, max-age=120"})
+            if r.status_code == 401:
+                _CRUMB_CACHE["crumb"] = None
+            last_err = f"HTTP {r.status_code}"
+        except Exception as e:
+            last_err = str(e)
+    raise HTTPException(status_code=502, detail=f"quote failed: {last_err}")
 
 # Include the router in the main app
 app.include_router(api_router)

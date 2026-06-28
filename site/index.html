@@ -317,6 +317,7 @@
           <button class="range-tab" onclick="switchRange('6mo',this)" data-range="6mo">6M</button>
           <button class="range-tab active" onclick="switchRange('1y',this)" data-range="1y">1Y</button>
           <button class="range-tab" onclick="switchRange('5y',this)" data-range="5y">5Y</button>
+          <button class="range-tab" onclick="switchRange('max',this)" data-range="max">ALL</button>
         </div>
       </div>
       <div class="chart-area">
@@ -487,27 +488,112 @@ const FETCH_STRATEGIES=[
   // Fallback B: allorigins wrapped
   {build:(sym,range,interval)=>'https://api.allorigins.win/get?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}&includePrePost=false`),parse:t=>{const o=JSON.parse(t);return JSON.parse(o.contents);}}
 ];
-const LIVE_CACHE={}; // symbol -> {data, ts}
-const LIVE_TTL=60*1000; // 60s
+const LIVE_CACHE={}; // symbol|range -> {data, ts}
+const QUOTE_CACHE={}; // symbol -> {data, ts}
+const LIVE_TTL=60*1000; const QUOTE_TTL=2*60*1000;
 
 async function yahooFetch(symbol,range,interval){
   let lastErr;
   for(const s of FETCH_STRATEGIES){
     try{
-      const ctrl=new AbortController();
-      const t=setTimeout(()=>ctrl.abort(),15000);
+      const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),15000);
       const r=await fetch(s.build(symbol,range,interval),{signal:ctrl.signal,headers:{'Accept':'application/json'}});
       clearTimeout(t);
       if(!r.ok){lastErr=new Error('HTTP '+r.status);continue;}
       const txt=await r.text();
-      try{
-        const j=s.parse(txt);
-        if(j&&j.chart)return j;
-        lastErr=new Error('Unexpected payload');
-      }catch(e){lastErr=e;}
+      try{const j=s.parse(txt);if(j&&j.chart)return j;lastErr=new Error('Unexpected payload');}catch(e){lastErr=e;}
     }catch(e){lastErr=e;}
   }
   throw lastErr||new Error('All fetch strategies failed');
+}
+
+// Live symbol search across NSE/BSE/global
+async function yahooSearch(q){
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),9000);
+  try{
+    const r=await fetch('/api/yahoo/search?q='+encodeURIComponent(q),{signal:ctrl.signal});
+    clearTimeout(t);
+    if(!r.ok)return [];
+    const j=await r.json();
+    return (j.quotes||[]).filter(it=>it.symbol&&!it.symbol.startsWith('^')&&(it.quoteType==='EQUITY'||it.quoteType==='ETF'||!it.quoteType));
+  }catch(e){return [];}
+}
+
+// Live fundamentals (P/E, EPS, ROE, margins, market cap, etc.)
+async function yahooQuote(symbol){
+  const cached=QUOTE_CACHE[symbol];
+  if(cached&&Date.now()-cached.ts<QUOTE_TTL)return cached.data;
+  const ctrl=new AbortController();const t=setTimeout(()=>ctrl.abort(),14000);
+  try{
+    const r=await fetch('/api/yahoo/quote?symbol='+encodeURIComponent(symbol),{signal:ctrl.signal});
+    clearTimeout(t);
+    if(!r.ok)return null;
+    const j=await r.json();
+    const m=j&&j.quoteSummary&&j.quoteSummary.result&&j.quoteSummary.result[0];
+    if(!m)return null;
+    const num=(x)=>x&&typeof x.raw==='number'?x.raw:(typeof x==='number'?x:null);
+    const sd=m.summaryDetail||{},ks=m.defaultKeyStatistics||{},fd=m.financialData||{},pr=m.price||{},ap=m.assetProfile||{};
+    const data={
+      price:num(pr.regularMarketPrice),
+      chg:num(pr.regularMarketChange),
+      chgPct:num(pr.regularMarketChangePercent)*100,
+      mktCap:num(pr.marketCap),
+      currency:pr.currency,
+      exchange:pr.exchangeName||pr.exchange,
+      shortName:pr.shortName||pr.longName,
+      longName:pr.longName||pr.shortName,
+      pe:num(sd.trailingPE)||num(ks.trailingPE),
+      forwardPE:num(sd.forwardPE),
+      pb:num(ks.priceToBook),
+      eps:num(ks.trailingEps),
+      forwardEps:num(ks.forwardEps),
+      peg:num(ks.pegRatio),
+      bv:num(ks.bookValue),
+      beta:num(sd.beta)||num(ks.beta),
+      dy:num(sd.dividendYield)*100||num(sd.trailingAnnualDividendYield)*100,
+      roe:num(fd.returnOnEquity)*100,
+      roa:num(fd.returnOnAssets)*100,
+      npm:num(fd.profitMargins)*100,
+      opm:num(fd.operatingMargins)*100,
+      gpm:num(fd.grossMargins)*100,
+      rg:num(fd.revenueGrowth)*100,
+      eg:num(fd.earningsGrowth)*100,
+      debtToEq:num(fd.debtToEquity),
+      currentRatio:num(fd.currentRatio),
+      quickRatio:num(fd.quickRatio),
+      revenue:num(fd.totalRevenue),
+      grossProfit:num(fd.grossProfits),
+      cash:num(fd.totalCash),
+      debt:num(fd.totalDebt),
+      fcf:num(fd.freeCashflow),
+      ocf:num(fd.operatingCashflow),
+      ebitda:num(fd.ebitda),
+      w52H:num(sd.fiftyTwoWeekHigh),
+      w52L:num(sd.fiftyTwoWeekLow),
+      dayH:num(sd.dayHigh),
+      dayL:num(sd.dayLow),
+      vol:num(sd.volume)||num(sd.averageVolume),
+      avgVol:num(sd.averageVolume),
+      sector:ap.sector,
+      industry:ap.industry,
+      desc:ap.longBusinessSummary,
+      emp:ap.fullTimeEmployees,
+      website:ap.website,
+      country:ap.country,
+      // 5-year financial history (annual)
+      hist:((m.incomeStatementHistory&&m.incomeStatementHistory.incomeStatementHistory)||[]).slice(0,5).reverse().map((row,i,arr)=>{
+        const eps=arr.length&&num(ks.trailingEps)?(num(row.netIncome)/(num(pr.marketCap)/num(pr.regularMarketPrice))):null;
+        return {
+          y:row.endDate&&row.endDate.fmt?row.endDate.fmt.slice(0,4):('Y'+i),
+          rev:num(row.totalRevenue),
+          np:num(row.netIncome),
+          eps
+        };
+      })
+    };
+    QUOTE_CACHE[symbol]={data,ts:Date.now()};
+    return data;
+  }catch(e){return null;}
 }
 
 async function fetchLiveStock(yahooSymbol,range){
@@ -515,7 +601,7 @@ async function fetchLiveStock(yahooSymbol,range){
   const cacheKey=yahooSymbol+'|'+range;
   const cached=LIVE_CACHE[cacheKey];
   if(cached&&Date.now()-cached.ts<LIVE_TTL)return cached.data;
-  const interval=range==='1d'?'5m':range==='5d'?'30m':range==='1mo'?'1d':range==='3mo'?'1d':range==='6mo'?'1d':range==='1y'?'1d':range==='5y'?'1wk':'1mo';
+  const interval=range==='1d'?'5m':range==='5d'?'30m':range==='1mo'?'1d':range==='3mo'?'1d':range==='6mo'?'1d':range==='1y'?'1d':range==='5y'?'1wk':range==='max'?'1mo':'1mo';
   const j=await yahooFetch(yahooSymbol,range,interval);
   const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
   if(!res)throw new Error('Empty chart response');
@@ -592,19 +678,51 @@ function filterSearch(q){
   return SEARCH_LIST.filter(s=>s.name.toLowerCase().includes(ql)||s.sym.toLowerCase().includes(ql)).slice(0,6);
 }
 
-function handleSearch(q){
+let _searchSeq=0;
+async function handleSearch(q){
   const dd=document.getElementById('home-dropdown');
-  const results=filterSearch(q);
-  if(!results.length){dd.style.display='none';return;}
-  dd.innerHTML=results.map(r=>`<div class="search-item" onmousedown="loadStock('${r.sym}')"><div><div class="si-name">${r.name}</div><div class="si-sym">${r.sym}.NS</div></div><span class="si-badge">NSE</span></div>`).join('');
+  q=(q||'').trim();
+  if(!q){dd.style.display='none';return;}
+  // First show local matches instantly
+  const local=filterSearch(q);
+  if(local.length){
+    dd.innerHTML=local.map(r=>`<div class="search-item" onmousedown="loadStock('${r.sym}')"><div><div class="si-name">${r.name}</div><div class="si-sym">${r.sym}.NS</div></div><span class="si-badge">NSE</span></div>`).join('');
+    dd.style.display='block';
+  }
+  // Then enrich with live Yahoo search for full NSE/BSE coverage
+  const seq=++_searchSeq;
+  const live=await yahooSearch(q);
+  if(seq!==_searchSeq)return; // stale
+  if(!live.length){if(!local.length)dd.style.display='none';return;}
+  const seen={};local.forEach(l=>seen[l.sym]=1);
+  const merged=local.slice();
+  live.forEach(it=>{
+    const sym=it.symbol;
+    if(seen[sym])return;
+    seen[sym]=1;
+    merged.push({sym,name:it.shortname||it.longname||sym,exch:it.exchange,isLive:true});
+  });
+  dd.innerHTML=merged.slice(0,10).map(r=>{
+    const exch=r.isLive?(r.sym.endsWith('.BO')?'BSE':r.sym.endsWith('.NS')?'NSE':(r.exch||'')):'NSE';
+    const onclick=r.isLive?`loadStock('${r.sym}')`:`loadStock('${r.sym}')`;
+    const displaySym=r.isLive?r.sym:(r.sym+'.NS');
+    return `<div class="search-item" onmousedown="${onclick}"><div><div class="si-name">${r.name}</div><div class="si-sym">${displaySym}</div></div><span class="si-badge">${exch}</span></div>`;
+  }).join('');
   dd.style.display='block';
 }
 
-function searchEnter(){
-  const q=document.getElementById('home-search').value;
-  const r=filterSearch(q);
-  if(r.length)loadStock(r[0].sym);
-  else if(STOCKS[q.toUpperCase()])loadStock(q.toUpperCase());
+async function searchEnter(){
+  const q=document.getElementById('home-search').value.trim();
+  if(!q)return;
+  const local=filterSearch(q);
+  if(local.length){loadStock(local[0].sym);return;}
+  if(STOCKS[q.toUpperCase()]){loadStock(q.toUpperCase());return;}
+  // Try direct symbol load (any Yahoo-style ticker)
+  const up=q.toUpperCase();
+  if(/^[A-Z0-9.\-]{1,25}$/.test(up)){loadStock(up);return;}
+  // Otherwise pick top live search result
+  const live=await yahooSearch(q);
+  if(live.length)loadStock(live[0].symbol);
   document.getElementById('home-dropdown').style.display='none';
 }
 
@@ -649,33 +767,54 @@ function removeWL(sym){const i=watchlist.indexOf(sym);if(i>=0){watchlist.splice(
 // ===================== AI ENGINE =====================
 function generateInsight(d){
   let vScore=50,bScore=50,gScore=50,rScore=70;
+  const de=(d.debtToEq!=null?d.debtToEq/100:d.de); // Yahoo gives debt/equity in percent
+  const cr=d.currentRatio!=null?d.currentRatio:d.cr;
   // Valuation
-  if(d.pe!==null){if(d.pe<12)vScore+=15;else if(d.pe<20)vScore+=8;else if(d.pe<35)vScore-=5;else vScore-=15;}
-  if(d.pb!==null){if(d.pb<1)vScore+=10;else if(d.pb<3)vScore+=5;else if(d.pb>8)vScore-=8;}
-  if(d.peg!==null){if(d.peg<1)vScore+=12;else if(d.peg<1.5)vScore+=5;else if(d.peg>2.5)vScore-=10;}
+  if(d.pe!=null){if(d.pe<12)vScore+=15;else if(d.pe<20)vScore+=8;else if(d.pe<35)vScore-=5;else vScore-=15;}
+  if(d.pb!=null){if(d.pb<1)vScore+=10;else if(d.pb<3)vScore+=5;else if(d.pb>8)vScore-=8;}
+  if(d.peg!=null){if(d.peg<1)vScore+=12;else if(d.peg<1.5)vScore+=5;else if(d.peg>2.5)vScore-=10;}
   // Balance
-  if(d.de!==null&&d.de<5){if(d.de<0.3)bScore+=15;else if(d.de<0.7)bScore+=8;else if(d.de<1.5)bScore-=5;else bScore-=12;}
-  if(d.cr!==null){if(d.cr>2)bScore+=10;else if(d.cr>1.2)bScore+=5;else if(d.cr<0.8)bScore-=12;}
-  if(d.fcf!==null&&d.fcf>0)bScore+=8;else if(d.fcf!==null&&d.fcf<0)bScore-=8;
+  if(de!=null&&de<5){if(de<0.3)bScore+=15;else if(de<0.7)bScore+=8;else if(de<1.5)bScore-=5;else bScore-=12;}
+  if(cr!=null){if(cr>2)bScore+=10;else if(cr>1.2)bScore+=5;else if(cr<0.8)bScore-=12;}
+  if(d.fcf!=null&&d.fcf>0)bScore+=8;else if(d.fcf!=null&&d.fcf<0)bScore-=8;
   // Growth
-  if(d.rg!==null){if(d.rg>20)gScore+=15;else if(d.rg>10)gScore+=8;else if(d.rg<0)gScore-=12;}
-  if(d.eg!==null){if(d.eg>25)gScore+=15;else if(d.eg>12)gScore+=8;else if(d.eg<0)gScore-=10;}
+  if(d.rg!=null){if(d.rg>20)gScore+=15;else if(d.rg>10)gScore+=8;else if(d.rg<0)gScore-=12;}
+  if(d.eg!=null){if(d.eg>25)gScore+=15;else if(d.eg>12)gScore+=8;else if(d.eg<0)gScore-=10;}
   // Risk
-  if(d.de!==null&&d.de>1.5&&d.de<5)rScore-=15;
-  if(d.opm!==null&&d.opm<5)rScore-=15;
-  if(d.npm!==null&&d.npm>15)rScore+=10;
-  if(d.roe!==null&&d.roe>20)rScore+=8;
+  if(de!=null&&de>1.5&&de<5)rScore-=15;
+  if(d.opm!=null&&d.opm<5)rScore-=15;
+  if(d.npm!=null&&d.npm>15)rScore+=10;
+  if(d.roe!=null&&d.roe>20)rScore+=8;
 
   const overall=Math.round((vScore+bScore+gScore+rScore)/4);
   const clamp=v=>Math.min(100,Math.max(0,v));
-  const rec=overall>=68?'BUY':overall>=55?'WATCH':overall>=42?'HOLD':'SELL';
+  const s100=clamp(overall);
+  const s10=(s100/10).toFixed(1);
+  const rec=s100>=68?'BUY':s100>=55?'WATCH':s100>=42?'HOLD':'SELL';
 
-  const valText=clamp(vScore)>=65?`<strong>Potentially undervalued</strong> — P/E of ${fN(d.pe,1)} and P/B of ${fN(d.pb,1)} suggest attractive entry.`:clamp(vScore)>=45?`<strong>Fairly valued</strong> — valuation metrics are in line with sector norms.`:`<strong>Premium valuation</strong> — P/E of ${fN(d.pe,1)} prices in high growth expectations.`;
-  const balText=clamp(bScore)>=65?`<strong>Strong balance sheet</strong> — D/E of ${fN(d.de,2)} shows conservative leverage.`:clamp(bScore)>=45?`<strong>Moderate financials</strong> — debt and liquidity within normal range.`:`<strong>Leverage risk</strong> — monitor debt levels and cash flow closely.`;
-  const groText=clamp(gScore)>=65?`<strong>Strong growth</strong> — revenue growing at ${fN(d.rg,1)}% with ${fN(d.eg,1)}% earnings expansion.`:clamp(gScore)>=45?`<strong>Moderate growth</strong> — business is expanding at a measured pace.`:`<strong>Growth concerns</strong> — revenue growth slowing, watch for margin compression.`;
-  const riskText=clamp(rScore)>=65?`<strong>Low risk profile</strong> — solid margins and strong capital efficiency.`:clamp(rScore)>=45?`<strong>Moderate risk</strong> — risk profile within acceptable equity range.`:`<strong>Elevated risk</strong> — thin margins or high leverage increases downside exposure.`;
+  // Build smart, contextual bullet points (3+ always)
+  const bullets=[];
+  if(d.pe!=null){bullets.push(d.pe<15?{ic:'✅',txt:`<strong>Attractive valuation</strong> — trailing P/E of <b>${fN(d.pe,1)}</b> is below the broad-market average of ~22, suggesting room for re-rating.`}:d.pe<25?{ic:'⚖️',txt:`<strong>Fair valuation</strong> — P/E of <b>${fN(d.pe,1)}</b> aligns with market norms; growth must justify it.`}:{ic:'⚠️',txt:`<strong>Premium valuation</strong> — P/E of <b>${fN(d.pe,1)}</b> prices in significant growth; any miss may trigger a sharp correction.`});}
+  if(d.roe!=null){bullets.push(d.roe>20?{ic:'✅',txt:`<strong>Excellent capital efficiency</strong> — Return on Equity of <b>${fN(d.roe,1)}%</b> indicates management is compounding shareholder capital at a strong rate.`}:d.roe>12?{ic:'⚖️',txt:`<strong>Decent profitability</strong> — ROE of <b>${fN(d.roe,1)}%</b> is acceptable but not exceptional for its sector.`}:{ic:'⚠️',txt:`<strong>Sub-par returns on capital</strong> — ROE of <b>${fN(d.roe,1)}%</b> trails peers and the cost of equity.`});}
+  if(d.rg!=null){bullets.push(d.rg>15?{ic:'🚀',txt:`<strong>Strong topline growth</strong> — revenue grew <b>${fN(d.rg,1)}%</b> YoY, signalling healthy demand and pricing power.`}:d.rg>5?{ic:'📈',txt:`<strong>Moderate growth</strong> — revenue expanding ${fN(d.rg,1)}% YoY, steady but not breakout.`}:d.rg<0?{ic:'⚠️',txt:`<strong>Revenue is contracting</strong> — sales fell <b>${fN(Math.abs(d.rg),1)}%</b> YoY, a red flag worth investigating before buying.`}:{ic:'📉',txt:`<strong>Flat growth</strong> — revenue ${fN(d.rg,1)}% YoY suggests business is in a plateau phase.`});}
+  if(de!=null){bullets.push(de<0.5?{ic:'✅',txt:`<strong>Conservative balance sheet</strong> — Debt-to-Equity of <b>${fN(de,2)}</b> gives the company flexibility through downturns.`}:de<1.5?{ic:'⚖️',txt:`<strong>Moderate leverage</strong> — D/E of <b>${fN(de,2)}</b> is manageable but watch interest cover.`}:{ic:'⚠️',txt:`<strong>High leverage risk</strong> — D/E of <b>${fN(de,2)}</b> amplifies downside in any earnings stress; monitor cash flows.`});}
+  if(d.npm!=null){bullets.push(d.npm>15?{ic:'✅',txt:`<strong>High-margin business</strong> — Net Profit Margin of <b>${fN(d.npm,1)}%</b> reflects strong pricing power and operational quality.`}:d.npm>5?{ic:'⚖️',txt:`<strong>Average margins</strong> — Net margin of <b>${fN(d.npm,1)}%</b> is typical for the sector; volume growth matters here.`}:{ic:'⚠️',txt:`<strong>Thin margins</strong> — Net margin of <b>${fN(d.npm,1)}%</b> leaves little buffer if input costs rise.`});}
+  if(d.dy!=null&&d.dy>0.5){bullets.push({ic:'💰',txt:`<strong>Dividend yield ${fN(d.dy,2)}%</strong> — provides a steady income kicker on top of any capital appreciation.`});}
 
-  return{score:clamp(overall),rec,valText,balText,groText,riskText};
+  // Always include at least 3 — pad with generic ones if needed
+  if(bullets.length<3){
+    bullets.push({ic:'ℹ️',txt:`<strong>Track price momentum</strong> — currently at ${d.price?'₹'+d.price.toFixed(2):'—'}, in a ${d.w52H&&d.w52L?(((d.price-d.w52L)/(d.w52H-d.w52L))*100).toFixed(0)+'% position of':'wide range within'} its 52-week range.`});
+  }
+  if(bullets.length<3){bullets.push({ic:'📊',txt:`<strong>Do your own diligence</strong> — verify recent earnings, management commentary and sector dynamics before any decision.`});}
+
+  const summaryByRec={
+    BUY:`A <b>${rec}</b> setup. Fundamentals are firing on multiple fronts. Suitable for accumulation with proper position sizing and stop-loss discipline.`,
+    WATCH:`A <b>${rec}</b> setup. The setup is encouraging but not yet conclusive — wait for confirmation or a better entry.`,
+    HOLD:`A <b>${rec}</b> setup. Mixed signals — neither a clear add nor a clear exit. Best to wait for a directional break.`,
+    SELL:`A <b>${rec}</b> setup. Multiple fundamental weaknesses outweigh positives — consider trimming or exiting until clarity returns.`
+  };
+
+  return{score:s100,score10:s10,rec,bullets,summary:summaryByRec[rec]};
 }
 
 // ===================== PRICE HISTORY GEN =====================
@@ -699,54 +838,55 @@ async function loadStock(sym,opts){
   opts=opts||{};
   document.getElementById('home-dropdown').style.display='none';
   document.getElementById('home-search').value='';
-  const base=STOCKS[sym];
-  if(!base){alert('Sorry, we don\'t have data for this symbol yet.');return;}
+  let base=STOCKS[sym];
+  // If unknown symbol, build a minimal stub on the fly (any NSE/BSE/global ticker works)
+  if(!base){
+    // Try to detect if user pasted a Yahoo-style symbol (e.g., TATASTEEL.NS, IRCTC.BO)
+    const ySym=sym.includes('.')?sym:(sym+'.NS');
+    base={sym:ySym,name:sym,ex:ySym.endsWith('.BO')?'BSE':'NSE',sector:'—',industry:'—',desc:'',emp:null,price:0,chg:0,chgPct:0};
+    STOCKS[sym]=base;
+  }
   currentStock=sym;
 
-  // Update URL hash so this view is shareable / refresh-safe
-  if(!opts.fromHash){
-    try{history.replaceState(null,'','#'+sym);}catch(e){}
-  }
+  if(!opts.fromHash){try{history.replaceState(null,'','#'+sym);}catch(e){}}
 
-  // Ensure baseline numeric fields exist so the optimistic render never throws.
   if(base.price==null)base.price=0;
   if(base.chg==null)base.chg=0;
   if(base.chgPct==null)base.chgPct=0;
 
-  // Render immediately with cached/baseline data so the page is responsive
   renderStockPage(base);
   showPage('stock');
   setLiveStatus('loading');
 
-  // Fetch live data from Yahoo Finance
+  // Parallel fetch: chart history + full fundamentals
   try{
-    const live=await fetchLiveStock(base.sym);
-    const livePrice=live.price!=null?live.price:base.price;
-    const liveMktCap=base.shares?livePrice*base.shares:base.mktCap;
-    const merged=Object.assign({},base,{
-      price:livePrice,
-      chg:live.chg!=null?live.chg:base.chg,
-      chgPct:live.chgPct!=null?live.chgPct:base.chgPct,
-      dayH:live.dayH!=null?live.dayH:base.dayH,
-      dayL:live.dayL!=null?live.dayL:base.dayL,
-      w52H:live.w52H!=null?live.w52H:base.w52H,
-      w52L:live.w52L!=null?live.w52L:base.w52L,
-      vol:live.vol!=null?live.vol:base.vol,
-      mktCap:liveMktCap,
-      _live:true,
-      _history:live.history,
-      _historyRange:'1y',
-      _fetchedAt:new Date()
-    });
-    STOCKS[sym]=merged; // cache merged
+    const [live,quote]=await Promise.allSettled([
+      fetchLiveStock(base.sym,'1y'),
+      yahooQuote(base.sym)
+    ]).then(rs=>rs.map(r=>r.status==='fulfilled'?r.value:null));
+
+    const merged=Object.assign({},base);
+    if(live){
+      Object.assign(merged,{
+        price:live.price!=null?live.price:merged.price,
+        chg:live.chg!=null?live.chg:merged.chg,
+        chgPct:live.chgPct!=null?live.chgPct:merged.chgPct,
+        dayH:live.dayH,dayL:live.dayL,w52H:live.w52H,w52L:live.w52L,vol:live.vol,
+        _history:live.history,_historyRange:'1y'
+      });
+    }
+    if(quote){
+      // Fundamentals from quoteSummary override hardcoded values
+      Object.keys(quote).forEach(k=>{if(quote[k]!=null&&quote[k]!=='')merged[k]=quote[k];});
+      // Convert mktCap (Yahoo gives raw INR, our format handles it)
+      if(quote.shortName&&(!base.name||base.name===sym))merged.name=quote.shortName;
+    }
+    merged._live=true;merged._fetchedAt=new Date();
+    STOCKS[sym]=merged;
     renderStockPage(merged);
     setLiveStatus('live','LIVE · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
-  }catch(e){
-    console.warn('[YourAnalyst] Live fetch failed:',e);
-    setLiveStatus('error','OFFLINE · cached');
-  }
+  }catch(e){console.warn('[YourAnalyst] fetch failed:',e);setLiveStatus('error','OFFLINE · cached');}
 
-  // Schedule auto-refresh while user stays on this page
   if(refreshTimer)clearInterval(refreshTimer);
   refreshTimer=setInterval(()=>{if(currentStock===sym)silentRefresh(sym);},REFRESH_MS);
 }
@@ -864,14 +1004,12 @@ function renderStockPage(d){
   const scoreColor=ins.score>=65?'#00E676':ins.score>=45?'#FFB800':'#FF3D57';
   arc.setAttribute('stroke',scoreColor);
   arc.setAttribute('stroke-dasharray',((ins.score/100)*circ*0.75)+' '+circ);
-  document.getElementById('score-text').textContent=ins.score;
+  // Show /10 score (e.g. "7.4" with smaller "/10" suffix)
+  document.getElementById('score-text').innerHTML=`<tspan font-size="20" font-weight="700">${ins.score10}</tspan><tspan font-size="11" fill="#4A6080" dx="2">/10</tspan>`;
   const rb=document.getElementById('rec-badge');
   rb.textContent=ins.rec;rb.className='rec-badge rec-'+ins.rec;
-  document.getElementById('overall-text').textContent=ins.score>=68?'Strong fundamentals. Consider building a position with proper risk management.':ins.score>=55?'Solid fundamentals with some mixed signals. Watchlist candidate.':ins.score>=42?'Mixed picture — neutral stance recommended until clarity improves.':'Fundamental weaknesses outweigh positives. Exercise caution.';
-  document.getElementById('ai-insights').innerHTML=[
-    {t:'📊 Valuation',txt:ins.valText},{t:'🏦 Balance Sheet',txt:ins.balText},
-    {t:'📈 Growth',txt:ins.groText},{t:'⚠️ Risk',txt:ins.riskText}
-  ].map(i=>`<div class="ai-insight"><div class="ai-insight-title">${i.t}</div><div class="ai-insight-text">${i.txt}</div></div>`).join('');
+  document.getElementById('overall-text').innerHTML=ins.summary;
+  document.getElementById('ai-insights').innerHTML=ins.bullets.map(b=>`<div class="ai-insight"><div class="ai-insight-title">${b.ic}</div><div class="ai-insight-text">${b.txt}</div></div>`).join('');
 
   updateWLBtn();
   renderMainChart(currentChartType,d);
@@ -909,7 +1047,7 @@ async function switchRange(range,btn){
   }
 }
 
-const RANGE_LABEL={'1mo':'1-Month','3mo':'3-Month','6mo':'6-Month','1y':'1-Year','5y':'5-Year','max':'Max'};
+const RANGE_LABEL={'1mo':'1-Month','3mo':'3-Month','6mo':'6-Month','1y':'1-Year','5y':'5-Year','max':'All-Time'};
 function renderMainChart(type,d){
   if(mainChart){mainChart.destroy();mainChart=null;}
   const canvas=document.getElementById('main-chart');
@@ -987,7 +1125,7 @@ function runCompare(){
   document.getElementById('c-head2').textContent=cSym2;
 
   // Stock cards
-  const renderCard=(d,i,cls)=>`<div class="compare-stock-card ${cls}"><div style="font-family:monospace;font-size:11px;color:${i===1?'#00D4FF':'#FFB800'}">${d.sym}</div><div style="font-size:14px;font-weight:600;color:#fff;margin:6px 0">${d.name}</div><div style="font-size:22px;font-family:monospace;font-weight:700;color:#fff">₹${d.price.toLocaleString('en-IN',{minimumFractionDigits:2})}</div><div style="font-size:12px;margin:4px 0;color:${d.chg>=0?'#00E676':'#FF3D57'}">${d.chg>=0?'+':''}${d.chg.toFixed(2)} (${fPct(d.chgPct)})</div><div style="font-size:11px;color:#4A6080">${fINR(d.mktCap)}</div><span class="rec-badge rec-${i.rec}" style="margin-top:8px;font-size:11px">${i.rec}</span></div>`;
+  const renderCard=(d,i,cls)=>`<div class="compare-stock-card ${cls}"><div style="font-family:monospace;font-size:11px;color:${i===1?'#00D4FF':'#FFB800'}">${d.sym}</div><div style="font-size:14px;font-weight:600;color:#fff;margin:6px 0">${d.name}</div><div style="font-size:22px;font-family:monospace;font-weight:700;color:#fff">₹${d.price.toLocaleString('en-IN',{minimumFractionDigits:2})}</div><div style="font-size:12px;margin:4px 0;color:${d.chg>=0?'#00E676':'#FF3D57'}">${d.chg>=0?'+':''}${d.chg.toFixed(2)} (${fPct(d.chgPct)})</div><div style="font-size:11px;color:#4A6080">${fINR(d.mktCap)}</div><div style="font-size:12px;color:#C8D8F0;margin-top:6px">Score: <b>${i.score10||(i.score/10).toFixed(1)}</b>/10</div><span class="rec-badge rec-${i.rec}" style="margin-top:8px;font-size:11px">${i.rec}</span></div>`;
   document.getElementById('compare-cards').innerHTML=renderCard(d1,1,'cs1')+renderCard(d2,2,'cs2');
 
   // Metrics
