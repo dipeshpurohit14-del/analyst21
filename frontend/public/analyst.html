@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0A0E1A;color:#C8D8F0;font-family:'Inter',system-ui,sans-serif;min-height:100vh}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:#0F1629}
+  ::-webkit-scrollbar-thumb{background:#1E2D4A;border-radius:3px}
+  #app{min-height:100vh;display:flex;flex-direction:column}
+
+  /* NAV */
+  .nav{display:flex;align-items:center;justify-content:space-between;padding:12px 20px;border-bottom:1px solid #1E2D4A;background:#0A0E1A;position:sticky;top:0;z-index:100}
+  .nav-brand{display:flex;align-items:center;gap:8px}
+  .nav-logo{width:30px;height:30px;background:rgba(0,212,255,0.15);border:1px solid rgba(0,212,255,0.3);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .nav-title{font-size:15px;font-weight:600;color:#fff}
+  .nav-sub{font-size:11px;color:#4A6080;margin-left:4px}
+  .nav-links{display:flex;align-items:center;gap:16px}
+  .nav-link{font-size:12px;color:#4A6080;cursor:pointer;padding:4px 10px;border-radius:6px;border:none;background:none;transition:color .2s}
+  .nav-link:hover,.nav-link.active{color:#00D4FF;background:rgba(0,212,255,0.08)}
+  .live-badge{display:flex;align-items:center;gap:5px;font-size:11px;color:#00E676;font-weight:500}
+  .live-dot{width:7px;height:7px;background:#00E676;border-radius:50%;animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+
+  /* PAGES */
+  .page{display:none;flex:1}
+  .page.active{display:flex;flex-direction:column}
+
+  /* HOME */
+  .home-hero{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;text-align:center}
+  .badge{display:inline-flex;align-items:center;gap:6px;background:rgba(0,212,255,0.1);border:1px solid rgba(0,212,255,0.3);border-radius:20px;padding:5px 14px;font-size:12px;color:#00D4FF;margin-bottom:24px}
+  .hero-title{font-size:36px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:12px}
+  .hero-title span{color:#00D4FF;display:block}
+  .hero-sub{font-size:15px;color:#4A6080;margin-bottom:32px;max-width:480px}
+
+  /* SEARCH */
+  .search-box{width:100%;max-width:500px;position:relative;margin-bottom:20px}
+  .search-input-wrap{display:flex;align-items:center;background:#141B2D;border:1px solid #1E2D4A;border-radius:12px;transition:border-color .2s;overflow:visible;position:relative}
+  .search-input-wrap:focus-within{border-color:#00D4FF;box-shadow:0 0 0 3px rgba(0,212,255,0.1)}
+  .search-icon{padding:0 12px;color:#4A6080;font-size:16px;flex-shrink:0}
+  .search-input{flex:1;background:none;border:none;outline:none;padding:13px 8px;color:#fff;font-size:14px;font-family:inherit}
+  .search-input::placeholder{color:#4A6080}
+  .search-dropdown{position:absolute;top:calc(100% + 6px);left:0;right:0;background:#141B2D;border:1px solid #1E2D4A;border-radius:12px;z-index:200;overflow:hidden;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+  .search-item{padding:10px 16px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(30,45,74,.5)}
+  .search-item:last-child{border-bottom:none}
+  .search-item:hover{background:rgba(0,212,255,0.08)}
+  .si-name{font-size:13px;color:#fff;font-weight:500}
+  .si-sym{font-size:11px;color:#4A6080;font-family:monospace;margin-top:2px}
+  .si-badge{font-size:10px;color:#00D4FF;background:rgba(0,212,255,0.1);padding:2px 7px;border-radius:4px}
+
+  /* TRENDING */
+  .trending{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:40px}
+  .trending-label{font-size:12px;color:#4A6080;align-self:center}
+  .trend-btn{padding:6px 12px;background:#141B2D;border:1px solid #1E2D4A;border-radius:8px;font-size:12px;color:#C8D8F0;cursor:pointer;transition:all .2s;font-family:inherit}
+  .trend-btn:hover{border-color:#00D4FF;color:#00D4FF}
+
+  /* FEATURES */
+  .features{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;max-width:540px;width:100%}
+  .feature-card{background:#141B2D;border:1px solid #1E2D4A;border-radius:12px;padding:18px;text-align:center}
+  .feat-icon{font-size:22px;margin-bottom:10px}
+  .feat-title{font-size:13px;font-weight:600;color:#fff;margin-bottom:6px}
+  .feat-desc{font-size:11px;color:#4A6080;line-height:1.5}
+
+  /* WATCHLIST */
+  .watchlist-section{margin-top:24px;width:100%;max-width:500px}
+  .wl-header{display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px;color:#4A6080}
+  .wl-chips{display:flex;flex-wrap:wrap;gap:6px}
+  .wl-chip{display:flex;align-items:center;gap:0;background:#141B2D;border:1px solid #1E2D4A;border-radius:8px;overflow:hidden}
+  .wl-chip-name{padding:5px 10px;font-size:12px;color:#C8D8F0;cursor:pointer;font-family:monospace}
+  .wl-chip-name:hover{color:#00D4FF}
+  .wl-chip-del{padding:5px 7px;font-size:11px;color:#4A6080;cursor:pointer;border:none;background:none;transition:color .2s}
+  .wl-chip-del:hover{color:#FF3D57}
+
+  /* STOCK PAGE */
+  .stock-page{padding:0}
+  .stock-header{padding:16px 20px;background:linear-gradient(135deg,#0F1629,#141B2D);border-bottom:1px solid #1E2D4A}
+  .stock-header-top{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px}
+  .stock-meta{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+  .stock-sym{font-size:12px;color:#00D4FF;font-family:monospace;font-weight:600}
+  .stock-ex{font-size:10px;color:#4A6080;background:#1E2D4A;padding:2px 7px;border-radius:4px}
+  .stock-sector{font-size:11px;color:#4A6080}
+  .stock-name{font-size:22px;font-weight:700;color:#fff;margin-bottom:8px}
+  .stock-price{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+  .price-main{font-size:32px;font-weight:700;color:#fff;font-family:monospace}
+  .price-change{display:flex;align-items:center;gap:4px;font-size:14px;font-family:monospace}
+  .up{color:#00E676}.down{color:#FF3D57}
+  .stock-header-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+  .header-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;text-align:right}
+  .hstat{display:flex;flex-direction:column}
+  .hstat-label{font-size:10px;color:#4A6080}
+  .hstat-val{font-size:13px;color:#fff;font-family:monospace;font-weight:500}
+  .range-bar-wrap{margin-top:12px}
+  .range-labels{display:flex;justify-content:space-between;font-size:10px;color:#4A6080;margin-bottom:4px}
+  .range-track{height:4px;background:#1E2D4A;border-radius:4px;position:relative}
+  .range-fill{height:100%;background:linear-gradient(90deg,#FF3D57,#FFB800,#00E676);border-radius:4px}
+  .range-thumb{position:absolute;width:12px;height:12px;background:#fff;border:2px solid #00D4FF;border-radius:50%;top:-4px;transform:translateX(-50%)}
+
+  /* STOCK BODY */
+  .stock-body{display:grid;grid-template-columns:200px 1fr 200px;gap:0;flex:1;min-height:0}
+  .stock-left{padding:14px;border-right:1px solid #1E2D4A;background:#0F1629;overflow-y:auto;max-height:calc(100vh - 180px)}
+  .stock-center{overflow-y:auto;max-height:calc(100vh - 180px)}
+  .stock-right{padding:14px;border-left:1px solid #1E2D4A;background:#0F1629;overflow-y:auto;max-height:calc(100vh - 180px)}
+
+  /* SECTION CARD */
+  .section-card{background:#141B2D;border:1px solid #1E2D4A;border-radius:10px;padding:12px;margin-bottom:10px}
+  .section-title{font-size:10px;color:#00D4FF;font-weight:700;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+  .ratio-row{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid rgba(30,45,74,.5)}
+  .ratio-row:last-child{border-bottom:none}
+  .ratio-label{font-size:11px;color:#4A6080}
+  .ratio-val{font-size:12px;color:#fff;font-family:monospace;font-weight:500}
+  .ratio-badge{font-size:9px;padding:1px 5px;border-radius:3px;margin-left:4px}
+  .badge-green{background:rgba(0,230,118,.1);color:#00E676}
+  .badge-red{background:rgba(255,61,87,.1);color:#FF3D57}
+  .badge-yellow{background:rgba(255,184,0,.1);color:#FFB800}
+
+  /* CHART TABS */
+  .chart-tabs{display:flex;gap:6px;padding:14px 14px 0}
+  .chart-tab{padding:6px 12px;border-radius:8px;font-size:11px;font-weight:500;cursor:pointer;border:1px solid #1E2D4A;background:none;color:#4A6080;font-family:inherit;transition:all .2s}
+  .chart-tab.active{background:#00D4FF;color:#0A0E1A;border-color:#00D4FF}
+  .chart-tab:hover:not(.active){border-color:#4A6080;color:#C8D8F0}
+  .chart-area{padding:14px}
+  .chart-title{font-size:13px;font-weight:600;color:#fff;margin-bottom:12px}
+
+  /* CANVAS CHARTS */
+  .chart-wrap{position:relative;width:100%;height:200px;margin-bottom:4px}
+
+  /* FINANCIAL TABLE */
+  .fin-table{width:100%;font-size:11px;border-collapse:collapse}
+  .fin-table th{color:#4A6080;font-weight:500;padding:6px 4px;text-align:right;border-bottom:1px solid #1E2D4A}
+  .fin-table th:first-child{text-align:left}
+  .fin-table td{padding:6px 4px;text-align:right;border-bottom:1px solid rgba(30,45,74,.3)}
+  .fin-table td:first-child{text-align:left;color:#4A6080}
+  .fin-table tr:last-child td{border-bottom:none}
+  .fin-table tr:hover td{background:rgba(0,212,255,0.03)}
+  .td-main{color:#fff;font-family:monospace}
+  .td-growth{font-size:9px}
+
+  /* AI SCORE */
+  .score-wrap{text-align:center;margin-bottom:12px}
+  .score-ring-svg{width:100px;height:100px;margin:0 auto}
+  .rec-badge{display:inline-block;padding:4px 16px;border-radius:20px;font-size:12px;font-weight:700;margin-top:8px}
+  .rec-BUY{background:rgba(0,230,118,.15);color:#00E676;border:1px solid rgba(0,230,118,.3)}
+  .rec-HOLD{background:rgba(255,184,0,.15);color:#FFB800;border:1px solid rgba(255,184,0,.3)}
+  .rec-SELL{background:rgba(255,61,87,.15);color:#FF3D57;border:1px solid rgba(255,61,87,.3)}
+  .rec-WATCH{background:rgba(0,212,255,.15);color:#00D4FF;border:1px solid rgba(0,212,255,.3)}
+  .ai-insight{background:#0F1629;border:1px solid rgba(30,45,74,.6);border-radius:8px;padding:10px;margin-bottom:8px}
+  .ai-insight-title{font-size:11px;font-weight:600;color:#fff;margin-bottom:4px}
+  .ai-insight-text{font-size:11px;color:#4A6080;line-height:1.5}
+  .ai-insight-text strong{color:#C8D8F0}
+
+  /* COMPANY INFO */
+  .company-info{font-size:11px;color:#4A6080;line-height:1.6;margin-bottom:10px;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden}
+  .company-meta{display:flex;align-items:center;gap:6px;font-size:11px;color:#4A6080;margin-bottom:4px}
+
+  /* HEADER ACTIONS */
+  .header-actions{display:flex;gap:8px;align-items:center}
+  .action-btn{padding:6px 10px;border:1px solid #1E2D4A;border-radius:8px;background:none;color:#4A6080;cursor:pointer;font-size:11px;transition:all .2s;font-family:inherit;display:flex;align-items:center;gap:4px}
+  .action-btn:hover{border-color:#00D4FF;color:#00D4FF}
+  .action-btn.starred{color:#FFB800;border-color:rgba(255,184,0,.3)}
+
+  /* COMPARE PAGE */
+  .compare-page{padding:20px}
+  .compare-title{font-size:18px;font-weight:600;color:#fff;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+  .compare-inputs{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+  .compare-btn{width:100%;padding:11px;background:#00D4FF;color:#0A0E1A;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;margin-bottom:20px;transition:opacity .2s}
+  .compare-btn:hover{opacity:.9}
+  .compare-btn:disabled{opacity:.4;cursor:not-allowed}
+  .compare-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .compare-stock-card{background:#141B2D;border:2px solid;border-radius:12px;padding:14px;text-align:center}
+  .cs1{border-color:#00D4FF}
+  .cs2{border-color:#FFB800}
+  .compare-metric-table{background:#141B2D;border:1px solid #1E2D4A;border-radius:12px;padding:14px;margin-top:14px}
+  .metric-row{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;padding:7px 0;border-bottom:1px solid rgba(30,45,74,.4);font-size:12px;align-items:center}
+  .metric-row:last-child{border-bottom:none}
+  .metric-label{color:#4A6080;text-align:center}
+  .metric-val{text-align:center;font-family:monospace;color:#fff;border-radius:6px;padding:2px 6px}
+  .metric-win{background:rgba(0,230,118,.1);color:#00E676}
+  .radar-wrap{position:relative;width:100%;height:220px;margin-top:14px}
+
+  /* DISCLAIMER */
+  .disclaimer{text-align:center;font-size:10px;color:#2A3A55;padding:12px;border-top:1px solid #1E2D4A;margin-top:auto}
+
+  @media(max-width:640px){
+    .stock-body{grid-template-columns:1fr}
+    .stock-left,.stock-right{max-height:none;border:none}
+    .stock-center{max-height:none}
+    .features{grid-template-columns:1fr}
+    .compare-inputs{grid-template-columns:1fr}
+    .compare-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-brand">
+    <div class="nav-logo">📊</div>
+    <span class="nav-title">Your Analyst</span>
+    <span class="nav-sub">NSE & BSE</span>
+  </div>
+  <div class="nav-links">
+    <button class="nav-link active" onclick="showPage('home')">Search</button>
+    <button class="nav-link" onclick="showPage('compare')">Compare</button>
+    <div class="live-badge"><span class="live-dot"></span>LIVE</div>
+  </div>
+</nav>
+
+<!-- HOME PAGE -->
+<div id="page-home" class="page active">
+  <div class="home-hero">
+    <div class="badge">⚡ Real-time Fundamental Analysis</div>
+    <h1 class="hero-title">Analyse Any Indian Stock<span>Like a Pro</span></h1>
+    <p class="hero-sub">Deep fundamentals for NSE & BSE stocks — P/E, ROE, balance sheets, AI insights, and 5-year financials.</p>
+
+    <div class="search-box">
+      <div class="search-input-wrap">
+        <span class="search-icon">🔍</span>
+        <input id="home-search" class="search-input" type="text" placeholder="Search RELIANCE, TCS, INFY..." autocomplete="off" oninput="handleSearch(this.value)" onkeydown="if(event.key==='Enter')searchEnter()"/>
+      </div>
+      <div id="home-dropdown" class="search-dropdown" style="display:none"></div>
+    </div>
+
+    <div class="trending">
+      <span class="trending-label">Trending:</span>
+      <button class="trend-btn" onclick="loadStock('RELIANCE')">Reliance Ind.</button>
+      <button class="trend-btn" onclick="loadStock('TCS')">TCS</button>
+      <button class="trend-btn" onclick="loadStock('INFY')">Infosys</button>
+      <button class="trend-btn" onclick="loadStock('HDFCBANK')">HDFC Bank</button>
+      <button class="trend-btn" onclick="loadStock('BAJFINANCE')">Bajaj Finance</button>
+    </div>
+
+    <div class="features">
+      <div class="feature-card"><div class="feat-icon">📈</div><div class="feat-title">Live Financials</div><div class="feat-desc">5-year revenue, profit & EPS trends with visual charts</div></div>
+      <div class="feature-card"><div class="feat-icon">📊</div><div class="feat-title">Deep Ratios</div><div class="feat-desc">P/E, P/B, ROE, ROCE, D/E and 15+ metrics</div></div>
+      <div class="feature-card"><div class="feat-icon">🤖</div><div class="feat-title">AI Insights</div><div class="feat-desc">Valuation, risk & growth scoring</div></div>
+    </div>
+
+    <div id="watchlist-section" class="watchlist-section" style="display:none">
+      <div class="wl-header">⭐ Your Watchlist</div>
+      <div id="wl-chips" class="wl-chips"></div>
+    </div>
+  </div>
+</div>
+
+<!-- STOCK PAGE -->
+<div id="page-stock" class="page" style="flex-direction:column">
+  <div class="stock-header">
+    <div class="stock-header-top">
+      <div>
+        <div class="stock-meta">
+          <button onclick="showPage('home')" style="background:none;border:none;color:#4A6080;cursor:pointer;font-size:11px;padding:0;font-family:inherit">← Back</button>
+          <span id="s-sym" class="stock-sym">RELIANCE.NS</span>
+          <span id="s-ex" class="stock-ex">NSE</span>
+          <span id="s-sector" class="stock-sector">Energy</span>
+        </div>
+        <div id="s-name" class="stock-name">Reliance Industries Ltd</div>
+        <div class="stock-price">
+          <span id="s-price" class="price-main">₹2,847.50</span>
+          <span id="s-change" class="price-change up">▲ +34.20 (+1.22%)</span>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <div class="header-actions">
+          <button id="wl-btn" class="action-btn" onclick="toggleWatchlist()">☆ Watch</button>
+          <button class="action-btn" onclick="showPage('compare')">⇄ Compare</button>
+        </div>
+        <div class="header-stats" id="s-header-stats"></div>
+      </div>
+    </div>
+    <div class="range-bar-wrap">
+      <div class="range-labels">
+        <span id="r-low">52W Low ₹2,220</span>
+        <span style="color:#C8D8F0">Current</span>
+        <span id="r-high">52W High ₹3,217</span>
+      </div>
+      <div class="range-track"><div id="r-fill" class="range-fill" style="width:60%"></div><div id="r-thumb" class="range-thumb" style="left:60%"></div></div>
+    </div>
+  </div>
+
+  <div class="stock-body">
+    <!-- LEFT -->
+    <div class="stock-left">
+      <div class="section-card">
+        <div class="section-title">Company</div>
+        <div class="company-meta">🏢 <span id="s-industry">Oil & Gas Integrated</span></div>
+        <div class="company-meta">👥 <span id="s-employees">236,334</span> employees</div>
+        <p id="s-desc" class="company-info">Reliance Industries Limited is a Fortune 500 company and the largest private sector corporation in India.</p>
+      </div>
+      <div class="section-card">
+        <div class="section-title">Valuation</div>
+        <div id="val-ratios"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">Performance</div>
+        <div id="perf-ratios"></div>
+      </div>
+    </div>
+
+    <!-- CENTER -->
+    <div class="stock-center">
+      <div class="chart-tabs">
+        <button class="chart-tab active" onclick="switchChart('price',this)">Stock Price</button>
+        <button class="chart-tab" onclick="switchChart('revenue',this)">Revenue & Profit</button>
+        <button class="chart-tab" onclick="switchChart('eps',this)">EPS Trend</button>
+      </div>
+      <div class="chart-area">
+        <div id="chart-title" class="chart-title">1-Year Price Chart</div>
+        <div class="chart-wrap"><canvas id="main-chart" role="img" aria-label="Stock price chart"></canvas></div>
+      </div>
+      <div class="chart-area" style="padding-top:0">
+        <div class="section-card" style="margin-bottom:0">
+          <div class="section-title">5-Year Financials</div>
+          <table class="fin-table">
+            <thead><tr id="fin-head"></tr></thead>
+            <tbody id="fin-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="chart-area" style="padding-top:8px">
+        <div class="section-card" style="margin-bottom:0">
+          <div class="section-title">Balance Sheet</div>
+          <div id="balance-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:4px"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="stock-right">
+      <div class="section-card">
+        <div class="section-title">Analyst Score</div>
+        <div class="score-wrap">
+          <svg id="score-svg" class="score-ring-svg" viewBox="0 0 100 100">
+            <circle cx="50" cy="50" r="44" fill="none" stroke="#1E2D4A" stroke-width="8" stroke-dasharray="207.3 276.5" stroke-linecap="round" transform="rotate(-135 50 50)"/>
+            <circle id="score-arc" cx="50" cy="50" r="44" fill="none" stroke="#00D4FF" stroke-width="8" stroke-dasharray="0 276.5" stroke-linecap="round" transform="rotate(-135 50 50)"/>
+            <text id="score-text" x="50" y="48" text-anchor="middle" font-size="18" font-weight="700" fill="#fff" font-family="monospace">—</text>
+            <text x="50" y="62" text-anchor="middle" font-size="10" fill="#4A6080">/100</text>
+          </svg>
+          <span id="rec-badge" class="rec-badge rec-HOLD">HOLD</span>
+          <p id="overall-text" style="font-size:11px;color:#4A6080;line-height:1.5;margin-top:10px"></p>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">AI Insights</div>
+        <div id="ai-insights"></div>
+      </div>
+      <div class="section-card">
+        <div class="section-title">Quick Stats</div>
+        <div id="quick-stats"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- COMPARE PAGE -->
+<div id="page-compare" class="page" style="flex-direction:column;overflow-y:auto">
+  <div class="compare-page">
+    <div class="compare-title">⇄ Stock Comparison</div>
+    <div class="compare-inputs">
+      <div>
+        <label style="font-size:11px;color:#4A6080;display:block;margin-bottom:5px">Stock 1</label>
+        <div class="search-input-wrap" style="border-color:rgba(0,212,255,.4)">
+          <span class="search-icon" style="font-size:12px">🔍</span>
+          <input id="c-search1" class="search-input" type="text" placeholder="RELIANCE, TCS..." oninput="handleCSearch(1,this.value)" autocomplete="off"/>
+        </div>
+        <div id="c-dropdown1" class="search-dropdown" style="display:none"></div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:#4A6080;display:block;margin-bottom:5px">Stock 2</label>
+        <div class="search-input-wrap" style="border-color:rgba(255,184,0,.4)">
+          <span class="search-icon" style="font-size:12px">🔍</span>
+          <input id="c-search2" class="search-input" type="text" placeholder="INFY, HDFCBANK..." oninput="handleCSearch(2,this.value)" autocomplete="off"/>
+        </div>
+        <div id="c-dropdown2" class="search-dropdown" style="display:none"></div>
+      </div>
+    </div>
+    <button id="compare-btn" class="compare-btn" onclick="runCompare()" disabled>Select two stocks to compare</button>
+    <div id="compare-result" style="display:none">
+      <div class="compare-grid" id="compare-cards"></div>
+      <div class="compare-metric-table">
+        <div style="font-size:12px;font-weight:600;color:#00D4FF;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px">Key Metrics</div>
+        <div class="metric-row" style="font-size:10px;color:#4A6080">
+          <div style="text-align:center">Metric</div>
+          <div id="c-head1" style="text-align:center;font-family:monospace;color:#00D4FF">—</div>
+          <div id="c-head2" style="text-align:center;font-family:monospace;color:#FFB800">—</div>
+        </div>
+        <div id="compare-metrics"></div>
+      </div>
+      <div style="position:relative;width:100%;height:220px;margin-top:14px">
+        <canvas id="radar-chart" role="img" aria-label="Radar comparison chart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="disclaimer">⚠ Educational use only · Not financial advice · Data powered by Yahoo Finance public API</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+// ===================== DATA =====================
+const STOCKS = {
+  RELIANCE:{sym:'RELIANCE.NS',name:'Reliance Industries Ltd',ex:'NSE',sector:'Energy',industry:'Oil & Gas Integrated',desc:'Reliance Industries Limited is a Fortune 500 company and the largest private sector corporation in India. Its activities span hydrocarbon exploration, petroleum refining, petrochemicals, retail, and digital services.',emp:236334,price:2847.50,chg:34.20,chgPct:1.22,mktCap:19276000000000,vol:8234567,avgVol:7500000,dayH:2863.00,dayL:2818.40,w52H:3217.90,w52L:2220.30,pe:24.8,pb:2.1,peg:1.4,eps:114.8,roe:8.7,roce:9.2,de:0.41,cr:1.32,dy:0.35,bv:1356,ebitda:1756e9,opm:16.4,npm:9.8,rg:12.3,eg:18.7,debt:3120e9,cash:1987e9,equity:9180e9,fcf:421e9,hist:[{y:'FY20',rev:6592e9,np:391e9,eps:57.8,ebitda:892e9},{y:'FY21',rev:5396e9,np:491e9,eps:72.6,ebitda:946e9},{y:'FY22',rev:7921e9,np:670e9,eps:99.2,ebitda:1234e9},{y:'FY23',rev:9746e9,np:739e9,eps:109.3,ebitda:1456e9},{y:'FY24',rev:10910e9,np:779e9,eps:114.8,ebitda:1756e9}]},
+  TCS:{sym:'TCS.NS',name:'Tata Consultancy Services Ltd',ex:'NSE',sector:'Technology',industry:'IT Services',desc:'Tata Consultancy Services is an Indian multinational IT services and consulting company, a subsidiary of the Tata Group, operating in 150+ locations across 46 countries.',emp:601546,price:3921.00,chg:-28.60,chgPct:-0.72,mktCap:14218e9,vol:2134876,avgVol:2400000,dayH:3956.00,dayL:3908.30,w52H:4412.00,w52L:3350.00,pe:28.4,pb:12.8,peg:2.1,eps:138.1,roe:45.2,roce:54.8,de:0.02,cr:2.87,dy:1.8,bv:306,ebitda:534e9,opm:24.1,npm:18.5,rg:8.4,eg:11.2,debt:14e9,cash:587e9,equity:1109e9,fcf:398e9,hist:[{y:'FY20',rev:1569e9,np:323e9,eps:88.6,ebitda:384e9},{y:'FY21',rev:1641e9,np:331e9,eps:90.7,ebitda:398e9},{y:'FY22',rev:1978e9,np:383e9,eps:104.9,ebitda:476e9},{y:'FY23',rev:2254e9,np:424e9,eps:116.1,ebitda:534e9},{y:'FY24',rev:2408e9,np:456e9,eps:124.8,ebitda:580e9}]},
+  INFY:{sym:'INFY.NS',name:'Infosys Ltd',ex:'NSE',sector:'Technology',industry:'IT Services',desc:'Infosys is an Indian multinational information technology company headquartered in Bangalore, providing business consulting, IT services and outsourcing.',emp:317240,price:1678.30,chg:12.45,chgPct:0.75,mktCap:6982e9,vol:5678234,avgVol:6000000,dayH:1689.00,dayL:1665.20,w52H:1952.00,w52L:1351.45,pe:24.1,pb:7.2,peg:1.9,eps:69.6,roe:31.7,roce:38.4,de:0.07,cr:2.34,dy:2.4,bv:233,ebitda:334e9,opm:20.7,npm:17.2,rg:9.8,eg:8.4,debt:41e9,cash:297e9,equity:970e9,fcf:245e9,hist:[{y:'FY20',rev:906e9,np:162e9,eps:38.9,ebitda:198e9},{y:'FY21',rev:1004e9,np:190e9,eps:45.1,ebitda:223e9},{y:'FY22',rev:1213e9,np:225e9,eps:53.3,ebitda:272e9},{y:'FY23',rev:1466e9,np:246e9,eps:58.0,ebitda:310e9},{y:'FY24',rev:1535e9,np:266e9,eps:63.2,ebitda:334e9}]},
+  HDFCBANK:{sym:'HDFCBANK.NS',name:'HDFC Bank Ltd',ex:'NSE',sector:'Banking',industry:'Private Banking',desc:'HDFC Bank Limited is India\'s largest private sector bank by assets, headquartered in Mumbai. It is the world\'s 10th largest bank by market capitalisation.',emp:213527,price:1743.80,chg:8.90,chgPct:0.51,mktCap:13278e9,vol:9123456,avgVol:8500000,dayH:1752.00,dayL:1731.10,w52H:1880.00,w52L:1363.55,pe:18.2,pb:2.7,peg:1.3,eps:95.8,roe:15.4,roce:null,de:7.2,cr:null,dy:1.1,bv:645,ebitda:null,opm:null,npm:22.3,rg:22.1,eg:19.4,debt:null,cash:null,equity:4912e9,fcf:null,hist:[{y:'FY20',rev:1327e9,np:263e9,eps:48.0,ebitda:0},{y:'FY21',rev:1481e9,np:312e9,eps:56.9,ebitda:0},{y:'FY22',rev:1604e9,np:361e9,eps:65.5,ebitda:0},{y:'FY23',rev:1958e9,np:444e9,eps:80.3,ebitda:0},{y:'FY24',rev:2766e9,np:617e9,eps:81.2,ebitda:0}]},
+  BAJFINANCE:{sym:'BAJFINANCE.NS',name:'Bajaj Finance Ltd',ex:'NSE',sector:'Financial Services',industry:'NBFC',desc:'Bajaj Finance Limited is one of the most diversified NBFCs in India, accepting public and corporate deposits and offering a wide range of financial products.',emp:42689,price:7234.60,chg:156.30,chgPct:2.21,mktCap:4368e9,vol:3456789,avgVol:2800000,dayH:7298.00,dayL:7102.40,w52H:8192.00,w52L:6187.20,pe:31.2,pb:5.8,peg:1.6,eps:232.0,roe:22.4,roce:12.1,de:4.2,cr:null,dy:0.3,bv:1248,ebitda:null,opm:null,npm:24.6,rg:28.4,eg:24.1,debt:null,cash:null,equity:754e9,fcf:null,hist:[{y:'FY20',rev:238e9,np:50e9,eps:84.2,ebitda:0},{y:'FY21',rev:262e9,np:48e9,eps:79.7,ebitda:0},{y:'FY22',rev:311e9,np:73e9,eps:120.4,ebitda:0},{y:'FY23',rev:444e9,np:113e9,eps:186.7,ebitda:0},{y:'FY24',rev:586e9,np:141e9,eps:232.0,ebitda:0}]},
+  ITC:{sym:'ITC.NS',name:'ITC Ltd',ex:'NSE',sector:'FMCG',industry:'Cigarettes & FMCG',desc:'ITC is an Indian conglomerate with diversified presence in cigarettes, hotels, paperboards, specialty papers, packaging, agri-business and FMCG.',emp:36046,price:448.70,chg:-2.30,chgPct:-0.51,mktCap:5598e9,vol:12345678,avgVol:11000000,dayH:453.20,dayL:446.80,w52H:528.50,w52L:395.20,pe:26.4,pb:7.1,peg:2.3,eps:17.0,roe:29.1,roce:37.2,de:0.01,cr:3.12,dy:3.1,bv:63.2,ebitda:224e9,opm:36.4,npm:27.4,rg:7.2,eg:8.9,debt:2e9,cash:145e9,equity:785e9,fcf:198e9,hist:[{y:'FY20',rev:463e9,np:127e9,eps:10.4,ebitda:164e9},{y:'FY21',rev:430e9,np:131e9,eps:10.7,ebitda:168e9},{y:'FY22',rev:537e9,np:152e9,eps:12.2,ebitda:194e9},{y:'FY23',rev:683e9,np:186e9,eps:14.9,ebitda:243e9},{y:'FY24',rev:701e9,np:211e9,eps:17.0,ebitda:264e9}]},
+  WIPRO:{sym:'WIPRO.NS',name:'Wipro Ltd',ex:'NSE',sector:'Technology',industry:'IT Services',desc:'Wipro Limited is an Indian multinational technology company that provides IT, consulting and business process services.',emp:234054,price:556.40,chg:4.80,chgPct:0.87,mktCap:2919e9,vol:7234567,avgVol:6500000,dayH:562.00,dayL:552.80,w52H:632.00,w52L:424.80,pe:19.8,pb:3.2,peg:2.1,eps:28.1,roe:16.8,roce:21.3,de:0.14,cr:2.01,dy:0.2,bv:174,ebitda:162e9,opm:17.2,npm:13.1,rg:4.2,eg:3.8,debt:98e9,cash:124e9,equity:862e9,fcf:121e9,hist:[{y:'FY20',rev:610e9,np:99e9,eps:18.1,ebitda:117e9},{y:'FY21',rev:620e9,np:101e9,eps:18.5,ebitda:122e9},{y:'FY22',rev:793e9,np:122e9,eps:22.1,ebitda:142e9},{y:'FY23',rev:903e9,np:111e9,eps:20.3,ebitda:152e9},{y:'FY24',rev:898e9,np:116e9,eps:22.1,ebitda:162e9}]},
+  MARUTI:{sym:'MARUTI.NS',name:'Maruti Suzuki India Ltd',ex:'NSE',sector:'Auto',industry:'Passenger Vehicles',desc:'Maruti Suzuki India Limited is an automobile manufacturer in India. It is a subsidiary of Suzuki Motor Corporation of Japan.',emp:23367,price:12847.00,chg:234.00,chgPct:1.86,mktCap:3878e9,vol:834567,avgVol:750000,dayH:12980.00,dayL:12721.40,w52H:14076.00,w52L:10009.00,pe:27.4,pb:4.8,peg:1.8,eps:468.9,roe:18.6,roce:24.1,de:0.0,cr:1.78,dy:1.1,bv:2683,ebitda:164e9,opm:11.2,npm:8.6,rg:19.4,eg:62.1,debt:0,cash:421e9,equity:1191e9,fcf:148e9,hist:[{y:'FY20',rev:748e9,np:56e9,eps:187.0,ebitda:83e9},{y:'FY21',rev:718e9,np:42e9,eps:140.3,ebitda:68e9},{y:'FY22',rev:834e9,np:37e9,eps:123.8,ebitda:65e9},{y:'FY23',rev:1172e9,np:89e9,eps:296.8,ebitda:124e9},{y:'FY24',rev:1399e9,np:141e9,eps:468.9,ebitda:164e9}]}
+};
+
+const SEARCH_LIST=[
+  {sym:'RELIANCE',name:'Reliance Industries Ltd'},{sym:'TCS',name:'Tata Consultancy Services Ltd'},
+  {sym:'INFY',name:'Infosys Ltd'},{sym:'HDFCBANK',name:'HDFC Bank Ltd'},
+  {sym:'BAJFINANCE',name:'Bajaj Finance Ltd'},{sym:'ITC',name:'ITC Ltd'},
+  {sym:'WIPRO',name:'Wipro Ltd'},{sym:'MARUTI',name:'Maruti Suzuki India Ltd'},
+  {sym:'HINDUNILVR',name:'Hindustan Unilever Ltd'},{sym:'KOTAKBANK',name:'Kotak Mahindra Bank Ltd'},
+  {sym:'LT',name:'Larsen & Toubro Ltd'},{sym:'AXISBANK',name:'Axis Bank Ltd'},
+  {sym:'ASIANPAINT',name:'Asian Paints Ltd'},{sym:'TITAN',name:'Titan Company Ltd'},
+  {sym:'SUNPHARMA',name:'Sun Pharmaceutical Industries Ltd'},{sym:'NESTLEIND',name:'Nestle India Ltd'},
+  {sym:'ADANIPORTS',name:'Adani Ports & SEZ Ltd'},{sym:'ONGC',name:'ONGC Ltd'},
+  {sym:'NTPC',name:'NTPC Ltd'},{sym:'BHARTIARTL',name:'Bharti Airtel Ltd'},
+  {sym:'HCLTECH',name:'HCL Technologies Ltd'},{sym:'TECHM',name:'Tech Mahindra Ltd'},
+  {sym:'ULTRACEMCO',name:'UltraTech Cement Ltd'},{sym:'POWERGRID',name:'Power Grid Corporation'}
+];
+
+// ===================== STATE =====================
+let currentStock=null,mainChart=null,radarChart=null;
+let cSym1=null,cSym2=null;
+const watchlist=JSON.parse(localStorage.getItem('ya-wl')||'[]');
+
+// ===================== YAHOO FINANCE LIVE API =====================
+// Yahoo Finance blocks browser CORS, so we route through:
+//  1. Our own Netlify Function (reliable, production)
+//  2. Public CORS proxies (fallback for local dev / outage)
+const FETCH_STRATEGIES=[
+  // Primary: same-origin Netlify Function (deployed alongside the site)
+  {build:(sym,range,interval)=>`/api/yahoo?symbol=${encodeURIComponent(sym)}&range=${range}&interval=${interval}`,parse:t=>JSON.parse(t),direct:true},
+  // Fallback A: allorigins raw
+  {build:(sym,range,interval)=>'https://api.allorigins.win/raw?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}&includePrePost=false`),parse:t=>JSON.parse(t)},
+  // Fallback B: allorigins wrapped
+  {build:(sym,range,interval)=>'https://api.allorigins.win/get?url='+encodeURIComponent(`https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}&includePrePost=false`),parse:t=>{const o=JSON.parse(t);return JSON.parse(o.contents);}}
+];
+const LIVE_CACHE={}; // symbol -> {data, ts}
+const LIVE_TTL=60*1000; // 60s
+
+async function yahooFetch(symbol,range,interval){
+  let lastErr;
+  for(const s of FETCH_STRATEGIES){
+    try{
+      const ctrl=new AbortController();
+      const t=setTimeout(()=>ctrl.abort(),15000);
+      const r=await fetch(s.build(symbol,range,interval),{signal:ctrl.signal,headers:{'Accept':'application/json'}});
+      clearTimeout(t);
+      if(!r.ok){lastErr=new Error('HTTP '+r.status);continue;}
+      const txt=await r.text();
+      try{
+        const j=s.parse(txt);
+        if(j&&j.chart)return j;
+        lastErr=new Error('Unexpected payload');
+      }catch(e){lastErr=e;}
+    }catch(e){lastErr=e;}
+  }
+  throw lastErr||new Error('All fetch strategies failed');
+}
+
+async function fetchLiveStock(yahooSymbol){
+  const cached=LIVE_CACHE[yahooSymbol];
+  if(cached&&Date.now()-cached.ts<LIVE_TTL)return cached.data;
+  const j=await yahooFetch(yahooSymbol,'1y','1d');
+  const res=j&&j.chart&&j.chart.result&&j.chart.result[0];
+  if(!res)throw new Error('Empty chart response');
+  const meta=res.meta||{};
+  const ts=res.timestamp||[];
+  const closes=(res.indicators&&res.indicators.quote&&res.indicators.quote[0]&&res.indicators.quote[0].close)||[];
+  const history=ts.map((t,i)=>({date:new Date(t*1000).toISOString().split('T')[0],close:closes[i]})).filter(p=>p.close!=null);
+  const price=meta.regularMarketPrice;
+  const prev=meta.chartPreviousClose!=null?meta.chartPreviousClose:meta.previousClose;
+  const chg=price-prev;
+  const data={
+    price,
+    chg,
+    chgPct:prev?(chg/prev)*100:0,
+    dayH:meta.regularMarketDayHigh,
+    dayL:meta.regularMarketDayLow,
+    w52H:meta.fiftyTwoWeekHigh,
+    w52L:meta.fiftyTwoWeekLow,
+    vol:meta.regularMarketVolume,
+    currency:meta.currency||'INR',
+    exchange:meta.exchangeName||meta.fullExchangeName,
+    history,
+    _live:true,
+    _fetchedAt:new Date()
+  };
+  LIVE_CACHE[yahooSymbol]={data,ts:Date.now()};
+  return data;
+}
+
+function setLiveStatus(state,msg){
+  // state: 'loading' | 'live' | 'stale' | 'error'
+  const dot=document.querySelector('.live-dot');
+  const lb=document.querySelector('.live-badge');
+  if(!dot||!lb)return;
+  const colors={loading:'#FFB800',live:'#00E676',stale:'#FFB800',error:'#FF3D57'};
+  const labels={loading:'FETCHING…',live:'LIVE',stale:'CACHED',error:'OFFLINE'};
+  dot.style.background=colors[state]||'#00E676';
+  lb.style.color=colors[state]||'#00E676';
+  lb.lastChild&&(lb.lastChild.nodeType===3?lb.lastChild.textContent=labels[state]:null);
+  // safer: rebuild text node
+  lb.innerHTML='<span class="live-dot" style="background:'+(colors[state]||'#00E676')+'"></span>'+(msg||labels[state]||'');
+}
+
+// ===================== UTILS =====================
+function fINR(v){if(v===null||v===undefined||isNaN(v))return '—';const a=Math.abs(v);if(a>=1e12)return '₹'+(v/1e12).toFixed(2)+'T';if(a>=1e9)return '₹'+(v/1e9).toFixed(2)+'B';if(a>=1e7)return '₹'+(v/1e7).toFixed(2)+'Cr';if(a>=1e5)return '₹'+(v/1e5).toFixed(2)+'L';return '₹'+v.toFixed(2);}
+function fN(v,d=2){return v===null||v===undefined||isNaN(v)?'—':v.toFixed(d);}
+function fPct(v){return v===null||v===undefined?'—':(v>=0?'+':'')+v.toFixed(2)+'%';}
+
+// ===================== PAGE NAV =====================
+function showPage(p){
+  document.querySelectorAll('.page').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(el=>el.classList.remove('active'));
+  document.getElementById('page-'+p).classList.add('active');
+  const btn=document.querySelector(`.nav-link[onclick*="${p}"]`);
+  if(btn)btn.classList.add('active');
+  if(p==='home')renderWatchlist();
+}
+
+// ===================== SEARCH =====================
+function filterSearch(q){
+  if(!q||q.length<1)return[];
+  const ql=q.toLowerCase();
+  return SEARCH_LIST.filter(s=>s.name.toLowerCase().includes(ql)||s.sym.toLowerCase().includes(ql)).slice(0,6);
+}
+
+function handleSearch(q){
+  const dd=document.getElementById('home-dropdown');
+  const results=filterSearch(q);
+  if(!results.length){dd.style.display='none';return;}
+  dd.innerHTML=results.map(r=>`<div class="search-item" onmousedown="loadStock('${r.sym}')"><div><div class="si-name">${r.name}</div><div class="si-sym">${r.sym}.NS</div></div><span class="si-badge">NSE</span></div>`).join('');
+  dd.style.display='block';
+}
+
+function searchEnter(){
+  const q=document.getElementById('home-search').value;
+  const r=filterSearch(q);
+  if(r.length)loadStock(r[0].sym);
+  else if(STOCKS[q.toUpperCase()])loadStock(q.toUpperCase());
+  document.getElementById('home-dropdown').style.display='none';
+}
+
+function handleCSearch(n,q){
+  const dd=document.getElementById('c-dropdown'+n);
+  const results=filterSearch(q);
+  if(!results.length){dd.style.display='none';return;}
+  dd.innerHTML=results.map(r=>`<div class="search-item" onmousedown="selectCompare(${n},'${r.sym}','${r.name}')"><div class="si-name">${r.name}</div><div class="si-sym">${r.sym}.NS</div></div>`).join('');
+  dd.style.display='block';
+}
+
+function selectCompare(n,sym,name){
+  if(n===1){cSym1=sym;document.getElementById('c-search1').value=name;}
+  else{cSym2=sym;document.getElementById('c-search2').value=name;}
+  document.getElementById('c-dropdown'+n).style.display='none';
+  const btn=document.getElementById('compare-btn');
+  if(cSym1&&cSym2){btn.disabled=false;btn.textContent='Compare Stocks';}
+}
+
+// ===================== WATCHLIST =====================
+function saveWatchlist(){localStorage.setItem('ya-wl',JSON.stringify(watchlist));}
+function toggleWatchlist(){
+  const sym=currentStock;
+  const idx=watchlist.indexOf(sym);
+  if(idx>=0)watchlist.splice(idx,1);else watchlist.push(sym);
+  saveWatchlist();updateWLBtn();renderWatchlist();
+}
+function updateWLBtn(){
+  const btn=document.getElementById('wl-btn');
+  if(watchlist.includes(currentStock)){btn.textContent='★ Watching';btn.classList.add('starred');}
+  else{btn.textContent='☆ Watch';btn.classList.remove('starred');}
+}
+function renderWatchlist(){
+  const sec=document.getElementById('watchlist-section');
+  const chips=document.getElementById('wl-chips');
+  if(!watchlist.length){sec.style.display='none';return;}
+  sec.style.display='block';
+  chips.innerHTML=watchlist.map(s=>`<div class="wl-chip"><span class="wl-chip-name" onclick="loadStock('${s}')">${s}</span><button class="wl-chip-del" onclick="removeWL('${s}')">✕</button></div>`).join('');
+}
+function removeWL(sym){const i=watchlist.indexOf(sym);if(i>=0){watchlist.splice(i,1);saveWatchlist();renderWatchlist();}}
+
+// ===================== AI ENGINE =====================
+function generateInsight(d){
+  let vScore=50,bScore=50,gScore=50,rScore=70;
+  // Valuation
+  if(d.pe!==null){if(d.pe<12)vScore+=15;else if(d.pe<20)vScore+=8;else if(d.pe<35)vScore-=5;else vScore-=15;}
+  if(d.pb!==null){if(d.pb<1)vScore+=10;else if(d.pb<3)vScore+=5;else if(d.pb>8)vScore-=8;}
+  if(d.peg!==null){if(d.peg<1)vScore+=12;else if(d.peg<1.5)vScore+=5;else if(d.peg>2.5)vScore-=10;}
+  // Balance
+  if(d.de!==null&&d.de<5){if(d.de<0.3)bScore+=15;else if(d.de<0.7)bScore+=8;else if(d.de<1.5)bScore-=5;else bScore-=12;}
+  if(d.cr!==null){if(d.cr>2)bScore+=10;else if(d.cr>1.2)bScore+=5;else if(d.cr<0.8)bScore-=12;}
+  if(d.fcf!==null&&d.fcf>0)bScore+=8;else if(d.fcf!==null&&d.fcf<0)bScore-=8;
+  // Growth
+  if(d.rg!==null){if(d.rg>20)gScore+=15;else if(d.rg>10)gScore+=8;else if(d.rg<0)gScore-=12;}
+  if(d.eg!==null){if(d.eg>25)gScore+=15;else if(d.eg>12)gScore+=8;else if(d.eg<0)gScore-=10;}
+  // Risk
+  if(d.de!==null&&d.de>1.5&&d.de<5)rScore-=15;
+  if(d.opm!==null&&d.opm<5)rScore-=15;
+  if(d.npm!==null&&d.npm>15)rScore+=10;
+  if(d.roe!==null&&d.roe>20)rScore+=8;
+
+  const overall=Math.round((vScore+bScore+gScore+rScore)/4);
+  const clamp=v=>Math.min(100,Math.max(0,v));
+  const rec=overall>=68?'BUY':overall>=55?'WATCH':overall>=42?'HOLD':'SELL';
+
+  const valText=clamp(vScore)>=65?`<strong>Potentially undervalued</strong> — P/E of ${fN(d.pe,1)} and P/B of ${fN(d.pb,1)} suggest attractive entry.`:clamp(vScore)>=45?`<strong>Fairly valued</strong> — valuation metrics are in line with sector norms.`:`<strong>Premium valuation</strong> — P/E of ${fN(d.pe,1)} prices in high growth expectations.`;
+  const balText=clamp(bScore)>=65?`<strong>Strong balance sheet</strong> — D/E of ${fN(d.de,2)} shows conservative leverage.`:clamp(bScore)>=45?`<strong>Moderate financials</strong> — debt and liquidity within normal range.`:`<strong>Leverage risk</strong> — monitor debt levels and cash flow closely.`;
+  const groText=clamp(gScore)>=65?`<strong>Strong growth</strong> — revenue growing at ${fN(d.rg,1)}% with ${fN(d.eg,1)}% earnings expansion.`:clamp(gScore)>=45?`<strong>Moderate growth</strong> — business is expanding at a measured pace.`:`<strong>Growth concerns</strong> — revenue growth slowing, watch for margin compression.`;
+  const riskText=clamp(rScore)>=65?`<strong>Low risk profile</strong> — solid margins and strong capital efficiency.`:clamp(rScore)>=45?`<strong>Moderate risk</strong> — risk profile within acceptable equity range.`:`<strong>Elevated risk</strong> — thin margins or high leverage increases downside exposure.`;
+
+  return{score:clamp(overall),rec,valText,balText,groText,riskText};
+}
+
+// ===================== PRICE HISTORY GEN =====================
+function genPriceHistory(basePrice){
+  const hist=[];let p=basePrice*0.82;
+  const now=new Date();
+  for(let i=252;i>=0;i--){
+    const d=new Date(now);d.setDate(d.getDate()-i);
+    if(d.getDay()===0||d.getDay()===6)continue;
+    p=Math.max(p+(Math.random()-0.48)*p*0.02,basePrice*0.5);
+    hist.push({date:d.toISOString().split('T')[0],close:parseFloat(p.toFixed(2))});
+  }
+  return hist;
+}
+
+// ===================== LOAD STOCK =====================
+async function loadStock(sym){
+  document.getElementById('home-dropdown').style.display='none';
+  document.getElementById('home-search').value='';
+  const base=STOCKS[sym];
+  if(!base){alert('Stock data coming soon! Try: RELIANCE, TCS, INFY, HDFCBANK, BAJFINANCE, ITC, WIPRO, MARUTI');return;}
+  currentStock=sym;
+
+  // Render immediately with cached/baseline data so the page is responsive
+  renderStockPage(base);
+  showPage('stock');
+  setLiveStatus('loading');
+
+  // Fetch live data from Yahoo Finance (via CORS proxy)
+  try{
+    const live=await fetchLiveStock(base.sym);
+    const merged=Object.assign({},base,{
+      price:live.price!=null?live.price:base.price,
+      chg:live.chg!=null?live.chg:base.chg,
+      chgPct:live.chgPct!=null?live.chgPct:base.chgPct,
+      dayH:live.dayH!=null?live.dayH:base.dayH,
+      dayL:live.dayL!=null?live.dayL:base.dayL,
+      w52H:live.w52H!=null?live.w52H:base.w52H,
+      w52L:live.w52L!=null?live.w52L:base.w52L,
+      vol:live.vol!=null?live.vol:base.vol,
+      _live:true,
+      _history:live.history
+    });
+    STOCKS[sym]=merged; // update cache so subsequent renders use live
+    renderStockPage(merged);
+    setLiveStatus('live','LIVE · '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'}));
+  }catch(e){
+    console.warn('[YourAnalyst] Live fetch failed:',e);
+    setLiveStatus('error','OFFLINE · cached');
+  }
+}
+
+function renderStockPage(d){
+  // Header
+  document.getElementById('s-sym').textContent=d.sym;
+  document.getElementById('s-ex').textContent=d.ex;
+  document.getElementById('s-sector').textContent=d.sector;
+  document.getElementById('s-name').textContent=d.name;
+  document.getElementById('s-price').textContent='₹'+d.price.toLocaleString('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const isUp=d.chg>=0;
+  const chgEl=document.getElementById('s-change');
+  chgEl.className='price-change '+(isUp?'up':'down');
+  chgEl.textContent=(isUp?'▲ +':'▼ ')+d.chg.toFixed(2)+' ('+fPct(d.chgPct)+')';
+
+  // Header stats
+  document.getElementById('s-header-stats').innerHTML=
+    `<div class="hstat"><span class="hstat-label">Market Cap</span><span class="hstat-val">${fINR(d.mktCap)}</span></div>
+     <div class="hstat"><span class="hstat-label">Volume</span><span class="hstat-val">${(d.vol/1e5).toFixed(2)}L</span></div>`;
+
+  // Range
+  const pct=Math.min(100,Math.max(0,((d.price-d.w52L)/(d.w52H-d.w52L))*100));
+  document.getElementById('r-low').textContent='52W Low ₹'+d.w52L.toFixed(0);
+  document.getElementById('r-high').textContent='52W High ₹'+d.w52H.toFixed(0);
+  document.getElementById('r-fill').style.width=pct+'%';
+  document.getElementById('r-thumb').style.left=pct+'%';
+
+  // Company info
+  document.getElementById('s-industry').textContent=d.industry;
+  document.getElementById('s-employees').textContent=d.emp.toLocaleString('en-IN');
+  document.getElementById('s-desc').textContent=d.desc;
+
+  // Valuation ratios
+  const vr=[
+    {l:'P/E Ratio',v:fN(d.pe,1),b:d.pe&&d.pe<15?'green':d.pe&&d.pe>40?'red':'yellow',bt:d.pe&&d.pe<15?'Low':d.pe&&d.pe>40?'High':'Mod'},
+    {l:'P/B Ratio',v:fN(d.pb,1),b:d.pb&&d.pb<1?'green':d.pb&&d.pb>5?'red':null,bt:d.pb&&d.pb<1?'Below Book':''},
+    {l:'EPS (TTM)',v:d.eps?'₹'+d.eps.toFixed(1):'—',b:null,bt:''},
+    {l:'PEG Ratio',v:fN(d.peg,2),b:d.peg&&d.peg<1?'green':d.peg&&d.peg>2.5?'red':null,bt:d.peg&&d.peg<1?'Underval':''},
+    {l:'Dividend Yield',v:d.dy?d.dy.toFixed(2)+'%':'—',b:null,bt:''},
+    {l:'Book Value',v:d.bv?'₹'+d.bv.toFixed(0):'—',b:null,bt:''},
+  ];
+  document.getElementById('val-ratios').innerHTML=vr.map(r=>`<div class="ratio-row"><span class="ratio-label">${r.l}</span><span class="ratio-val">${r.v}${r.b&&r.bt?`<span class="ratio-badge badge-${r.b}">${r.bt}</span>`:''}</span></div>`).join('');
+
+  // Performance
+  const pr=[
+    {l:'ROE',v:d.roe?d.roe.toFixed(1)+'%':'—',good:d.roe&&d.roe>15},
+    {l:'ROCE',v:d.roce?d.roce.toFixed(1)+'%':'—',good:d.roce&&d.roce>15},
+    {l:'Net Margin',v:d.npm?d.npm.toFixed(1)+'%':'—',good:d.npm&&d.npm>12},
+    {l:'Op. Margin',v:d.opm?d.opm.toFixed(1)+'%':'—',good:d.opm&&d.opm>15},
+    {l:'Rev Growth',v:fPct(d.rg),good:d.rg&&d.rg>10},
+    {l:'EPS Growth',v:fPct(d.eg),good:d.eg&&d.eg>10},
+  ];
+  document.getElementById('perf-ratios').innerHTML=pr.map(r=>`<div class="ratio-row"><span class="ratio-label">${r.l}</span><span class="ratio-val" style="color:${r.good?'#00E676':'#C8D8F0'}">${r.v}</span></div>`).join('');
+
+  // Financial table
+  const head=document.getElementById('fin-head');
+  const body=document.getElementById('fin-body');
+  head.innerHTML='<th>Metric</th>'+d.hist.map(h=>`<th>${h.y}</th>`).join('');
+  const rows=[
+    {l:'Revenue',key:'rev'},{l:'Net Profit',key:'np'},{l:'EPS (₹)',key:'eps'}
+  ];
+  body.innerHTML=rows.map(row=>`<tr><td>${row.l}</td>${d.hist.map((h,i)=>{
+    const v=h[row.key];const prev=i>0?d.hist[i-1][row.key]:null;
+    const g=prev&&prev>0?((v-prev)/Math.abs(prev))*100:null;
+    return `<td><div class="td-main">${row.key==='eps'?'₹'+v.toFixed(1):fINR(v)}</div>${g!==null?`<div class="td-growth" style="color:${g>=0?'#00E676':'#FF3D57'}">${g>=0?'+':''}${g.toFixed(0)}%</div>`:''}</td>`;
+  }).join('')}</tr>`).join('');
+
+  // Balance sheet
+  const bs=[
+    {l:'Total Debt',v:fINR(d.debt),c:''},
+    {l:'Cash',v:fINR(d.cash),c:'#00E676'},
+    {l:'Equity',v:fINR(d.equity),c:''},
+    {l:'Free CF',v:fINR(d.fcf),c:d.fcf&&d.fcf>0?'#00E676':'#FF3D57'},
+  ];
+  document.getElementById('balance-grid').innerHTML=bs.map(b=>`<div style="background:#0F1629;border:1px solid #1E2D4A;border-radius:8px;padding:10px"><div style="font-size:10px;color:#4A6080;margin-bottom:4px">${b.l}</div><div style="font-size:12px;font-family:monospace;font-weight:600;color:${b.c||'#fff'}">${b.v}</div></div>`).join('');
+
+  // Quick stats
+  document.getElementById('quick-stats').innerHTML=[
+    {l:'Day High',v:'₹'+d.dayH.toFixed(2)},{l:'Day Low',v:'₹'+d.dayL.toFixed(2)},
+    {l:'Avg Volume',v:(d.avgVol/1e5).toFixed(2)+'L'},{l:'52W High',v:'₹'+d.w52H.toFixed(2)},{l:'52W Low',v:'₹'+d.w52L.toFixed(2)}
+  ].map(s=>`<div class="ratio-row"><span class="ratio-label">${s.l}</span><span class="ratio-val">${s.v}</span></div>`).join('');
+
+  // AI
+  const ins=generateInsight(d);
+  const circ=2*Math.PI*44;
+  const arc=document.getElementById('score-arc');
+  const scoreColor=ins.score>=65?'#00E676':ins.score>=45?'#FFB800':'#FF3D57';
+  arc.setAttribute('stroke',scoreColor);
+  arc.setAttribute('stroke-dasharray',((ins.score/100)*circ*0.75)+' '+circ);
+  document.getElementById('score-text').textContent=ins.score;
+  const rb=document.getElementById('rec-badge');
+  rb.textContent=ins.rec;rb.className='rec-badge rec-'+ins.rec;
+  document.getElementById('overall-text').textContent=ins.score>=68?'Strong fundamentals. Consider building a position with proper risk management.':ins.score>=55?'Solid fundamentals with some mixed signals. Watchlist candidate.':ins.score>=42?'Mixed picture — neutral stance recommended until clarity improves.':'Fundamental weaknesses outweigh positives. Exercise caution.';
+  document.getElementById('ai-insights').innerHTML=[
+    {t:'📊 Valuation',txt:ins.valText},{t:'🏦 Balance Sheet',txt:ins.balText},
+    {t:'📈 Growth',txt:ins.groText},{t:'⚠️ Risk',txt:ins.riskText}
+  ].map(i=>`<div class="ai-insight"><div class="ai-insight-title">${i.t}</div><div class="ai-insight-text">${i.txt}</div></div>`).join('');
+
+  updateWLBtn();
+  renderMainChart('price',d);
+  showPage('stock');
+}
+
+// ===================== CHARTS =====================
+function switchChart(type,btn){
+  document.querySelectorAll('.chart-tab').forEach(t=>t.classList.remove('active'));
+  btn.classList.add('active');
+  const d=STOCKS[currentStock];
+  renderMainChart(type,d);
+}
+
+function renderMainChart(type,d){
+  if(mainChart){mainChart.destroy();mainChart=null;}
+  const canvas=document.getElementById('main-chart');
+  const ctx=canvas.getContext('2d');
+  const isUp=d.chg>=0;
+
+  if(type==='price'){
+    document.getElementById('chart-title').textContent=(d._live?'1-Year Price Chart · Live':'1-Year Price Chart');
+    const ph=(d._history&&d._history.length>20)?d._history:genPriceHistory(d.price);
+    const step=Math.max(1,Math.ceil(ph.length/50));
+    mainChart=new Chart(ctx,{
+      type:'line',
+      data:{labels:ph.filter((_,i)=>i%step===0).map(p=>p.date.slice(5)),
+        datasets:[{label:'Price',data:ph.filter((_,i)=>i%step===0).map(p=>p.close),borderColor:isUp?'#00E676':'#FF3D57',borderWidth:2,pointRadius:0,fill:true,backgroundColor:isUp?'rgba(0,230,118,0.08)':'rgba(255,61,87,0.08)',tension:0.3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:(c)=>'₹'+c.parsed.y.toFixed(2)}}},scales:{x:{ticks:{color:'#4A6080',maxTicksLimit:6},grid:{color:'#1E2D4A'}},y:{ticks:{color:'#4A6080',callback:v=>'₹'+(v>=1000?(v/1000).toFixed(1)+'k':v)},grid:{color:'#1E2D4A'}}}}
+    });
+  } else if(type==='revenue'){
+    document.getElementById('chart-title').textContent='Revenue vs Net Profit (5Y)';
+    mainChart=new Chart(ctx,{
+      type:'bar',
+      data:{labels:d.hist.map(h=>h.y),datasets:[
+        {label:'Revenue',data:d.hist.map(h=>h.rev),backgroundColor:'rgba(0,212,255,0.7)',borderRadius:4},
+        {label:'Net Profit',data:d.hist.map(h=>h.np),backgroundColor:'rgba(0,230,118,0.7)',borderRadius:4}
+      ]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#4A6080',font:{size:11}}},tooltip:{callbacks:{label:(c)=>c.dataset.label+': '+fINR(c.parsed.y)}}},scales:{x:{ticks:{color:'#4A6080'},grid:{color:'#1E2D4A'}},y:{ticks:{color:'#4A6080',callback:v=>fINR(v)},grid:{color:'#1E2D4A'}}}}
+    });
+  } else {
+    document.getElementById('chart-title').textContent='EPS Trend (5Y)';
+    mainChart=new Chart(ctx,{
+      type:'line',
+      data:{labels:d.hist.map(h=>h.y),datasets:[{label:'EPS (₹)',data:d.hist.map(h=>h.eps),borderColor:'#FFB800',borderWidth:2.5,pointBackgroundColor:'#FFB800',pointRadius:5,tension:0.3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#4A6080'}},tooltip:{callbacks:{label:(c)=>'EPS: ₹'+c.parsed.y.toFixed(2)}}},scales:{x:{ticks:{color:'#4A6080'},grid:{color:'#1E2D4A'}},y:{ticks:{color:'#4A6080',callback:v=>'₹'+v.toFixed(0)},grid:{color:'#1E2D4A'}}}}
+    });
+  }
+}
+
+// ===================== COMPARE =====================
+function runCompare(){
+  if(!cSym1||!cSym2)return;
+  const d1=STOCKS[cSym1],d2=STOCKS[cSym2];
+  if(!d1||!d2){alert('Full data available for: RELIANCE, TCS, INFY, HDFCBANK, BAJFINANCE, ITC, WIPRO, MARUTI');return;}
+  const i1=generateInsight(d1),i2=generateInsight(d2);
+  document.getElementById('compare-result').style.display='block';
+  document.getElementById('c-head1').textContent=cSym1;
+  document.getElementById('c-head2').textContent=cSym2;
+
+  // Stock cards
+  const renderCard=(d,i,cls)=>`<div class="compare-stock-card ${cls}"><div style="font-family:monospace;font-size:11px;color:${i===1?'#00D4FF':'#FFB800'}">${d.sym}</div><div style="font-size:14px;font-weight:600;color:#fff;margin:6px 0">${d.name}</div><div style="font-size:22px;font-family:monospace;font-weight:700;color:#fff">₹${d.price.toLocaleString('en-IN',{minimumFractionDigits:2})}</div><div style="font-size:12px;margin:4px 0;color:${d.chg>=0?'#00E676':'#FF3D57'}">${d.chg>=0?'+':''}${d.chg.toFixed(2)} (${fPct(d.chgPct)})</div><div style="font-size:11px;color:#4A6080">${fINR(d.mktCap)}</div><span class="rec-badge rec-${i.rec}" style="margin-top:8px;font-size:11px">${i.rec}</span></div>`;
+  document.getElementById('compare-cards').innerHTML=renderCard(d1,1,'cs1')+renderCard(d2,2,'cs2');
+
+  // Metrics
+  const METRICS=[
+    {l:'P/E',k:'pe',lb:true,f:v=>fN(v,1)},{l:'P/B',k:'pb',lb:true,f:v=>fN(v,1)},
+    {l:'ROE %',k:'roe',lb:false,f:v=>v?v.toFixed(1)+'%':'—'},{l:'Net Margin',k:'npm',lb:false,f:v=>v?v.toFixed(1)+'%':'—'},
+    {l:'D/E Ratio',k:'de',lb:true,f:v=>fN(v,2)},{l:'EPS',k:'eps',lb:false,f:v=>v?'₹'+v.toFixed(1):'—'},
+    {l:'Rev Growth',k:'rg',lb:false,f:v=>fPct(v)},{l:'AI Score',k:'_score',lb:false,f:v=>v+'/100'},
+  ];
+  const w=(v1,v2,lb)=>{if(v1===null||v2===null)return null;return lb?(v1<v2?'s1':'s2'):(v1>v2?'s1':'s2');};
+  document.getElementById('compare-metrics').innerHTML=METRICS.map(m=>{
+    const v1=m.k==='_score'?i1.score:d1[m.k];
+    const v2=m.k==='_score'?i2.score:d2[m.k];
+    const win=w(v1,v2,m.lb);
+    return `<div class="metric-row"><span class="metric-label">${m.l}</span><span class="metric-val ${win==='s1'?'metric-win':''}">${m.f(v1)}${win==='s1'?' ✓':''}</span><span class="metric-val ${win==='s2'?'metric-win':''}">${m.f(v2)}${win==='s2'?' ✓':''}</span></div>`;
+  }).join('');
+
+  // Radar
+  if(radarChart){radarChart.destroy();}
+  radarChart=new Chart(document.getElementById('radar-chart'),{
+    type:'radar',
+    data:{
+      labels:['Valuation','ROE','Net Margin','Growth','AI Score'],
+      datasets:[
+        {label:cSym1,data:[Math.min(100,(1/(d1.pe||30))*600),Math.min(100,d1.roe||0),Math.min(100,d1.npm||0),Math.max(0,Math.min(100,d1.rg||0)),i1.score],borderColor:'#00D4FF',backgroundColor:'rgba(0,212,255,0.12)',borderWidth:2,pointBackgroundColor:'#00D4FF'},
+        {label:cSym2,data:[Math.min(100,(1/(d2.pe||30))*600),Math.min(100,d2.roe||0),Math.min(100,d2.npm||0),Math.max(0,Math.min(100,d2.rg||0)),i2.score],borderColor:'#FFB800',backgroundColor:'rgba(255,184,0,0.12)',borderWidth:2,pointBackgroundColor:'#FFB800'}
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,scales:{r:{grid:{color:'#1E2D4A'},angleLines:{color:'#1E2D4A'},ticks:{color:'#4A6080',backdropColor:'transparent',font:{size:9}},pointLabels:{color:'#C8D8F0',font:{size:11}}}},plugins:{legend:{labels:{color:'#C8D8F0',font:{size:11}}}}}
+  });
+}
+
+// ===================== INIT =====================
+renderWatchlist();
+// Close dropdowns on click outside
+document.addEventListener('click',e=>{
+  if(!e.target.closest('#home-search')&&!e.target.closest('#home-dropdown'))document.getElementById('home-dropdown').style.display='none';
+  if(!e.target.closest('#c-search1')&&!e.target.closest('#c-dropdown1'))document.getElementById('c-dropdown1').style.display='none';
+  if(!e.target.closest('#c-search2')&&!e.target.closest('#c-dropdown2'))document.getElementById('c-dropdown2').style.display='none';
+});
+</script>
+</body>
+</html>

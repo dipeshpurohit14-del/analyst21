@@ -1,9 +1,12 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, HTTPException, Query
+from fastapi.responses import Response
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import re
 import logging
+import httpx
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List
@@ -65,6 +68,51 @@ async def get_status_checks():
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
     
     return status_checks
+
+
+# Yahoo Finance proxy — mirrors the Netlify Function so the preview URL works end-to-end.
+_YF_SYMBOL_RE = re.compile(r"^[A-Z0-9.\-^=]{1,20}$", re.IGNORECASE)
+
+@api_router.get("/yahoo")
+async def yahoo_proxy(
+    symbol: str = Query(...),
+    range: str = Query("1y"),
+    interval: str = Query("1d"),
+):
+    if not _YF_SYMBOL_RE.match(symbol):
+        raise HTTPException(status_code=400, detail="Invalid symbol")
+    url = (
+        f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}"
+        f"?interval={interval}&range={range}&includePrePost=false"
+    )
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "application/json,text/plain,*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+    }
+    try:
+        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
+            r = await client.get(url, headers=headers)
+        if r.status_code != 200:
+            raise RuntimeError(f"upstream {r.status_code}")
+    except Exception:
+        # Upstream failed or rate-limited from this IP — fall back to a public proxy
+        try:
+            import urllib.parse
+            fallback = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(url, safe="")
+            async with httpx.AsyncClient(timeout=18.0, follow_redirects=True) as client:
+                r = await client.get(fallback, headers={"Accept": "application/json"})
+        except Exception as e2:
+            raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e2}")
+    return Response(
+        content=r.content,
+        status_code=200 if r.status_code == 200 else r.status_code,
+        media_type="application/json",
+        headers={"Cache-Control": "public, max-age=60"},
+    )
 
 # Include the router in the main app
 app.include_router(api_router)
