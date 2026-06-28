@@ -73,6 +73,15 @@ async def get_status_checks():
 # Yahoo Finance proxy — mirrors the Netlify Function so the preview URL works end-to-end.
 _YF_SYMBOL_RE = re.compile(r"^[A-Z0-9.\-^=]{1,20}$", re.IGNORECASE)
 
+
+async def _try_fetch(url: str, headers: dict, timeout: float):
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        r = await client.get(url, headers=headers)
+        if r.status_code == 200 and r.content and b'"chart"' in r.content[:64]:
+            return r.content
+        raise RuntimeError(f"bad response {r.status_code}")
+
+
 @api_router.get("/yahoo")
 async def yahoo_proxy(
     symbol: str = Query(...),
@@ -93,26 +102,31 @@ async def yahoo_proxy(
         "Accept": "application/json,text/plain,*/*",
         "Accept-Language": "en-US,en;q=0.9",
     }
-    try:
-        async with httpx.AsyncClient(timeout=12.0, follow_redirects=True) as client:
-            r = await client.get(url, headers=headers)
-        if r.status_code != 200:
-            raise RuntimeError(f"upstream {r.status_code}")
-    except Exception:
-        # Upstream failed or rate-limited from this IP — fall back to a public proxy
+    import urllib.parse
+    allorigins = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(url, safe="")
+    # Strategy chain — try each, fall through on failure.
+    # Allorigins first since our pod IP is often rate-limited by Yahoo directly;
+    # on Netlify's edge IPs the order can be flipped (direct first), but allorigins
+    # gives a consistent path that works from any IP.
+    strategies = [
+        (allorigins, {}, 18.0),      # public proxy (different IP)
+        (url, headers, 8.0),         # direct Yahoo
+        (allorigins, {}, 18.0),      # retry public proxy
+        (url, headers, 8.0),         # retry direct Yahoo
+    ]
+    last_err = None
+    for u, h, t in strategies:
         try:
-            import urllib.parse
-            fallback = "https://api.allorigins.win/raw?url=" + urllib.parse.quote(url, safe="")
-            async with httpx.AsyncClient(timeout=18.0, follow_redirects=True) as client:
-                r = await client.get(fallback, headers={"Accept": "application/json"})
-        except Exception as e2:
-            raise HTTPException(status_code=502, detail=f"Upstream fetch failed: {e2}")
-    return Response(
-        content=r.content,
-        status_code=200 if r.status_code == 200 else r.status_code,
-        media_type="application/json",
-        headers={"Cache-Control": "public, max-age=60"},
-    )
+            content = await _try_fetch(u, h, t)
+            return Response(
+                content=content,
+                status_code=200,
+                media_type="application/json",
+                headers={"Cache-Control": "public, max-age=60"},
+            )
+        except Exception as e:
+            last_err = e
+    raise HTTPException(status_code=502, detail=f"All fetch strategies failed: {last_err}")
 
 # Include the router in the main app
 app.include_router(api_router)

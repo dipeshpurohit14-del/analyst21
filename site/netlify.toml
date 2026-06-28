@@ -1,0 +1,13 @@
+# Netlify configuration for Your Analyst
+# Deploys the static index.html + a serverless function that proxies Yahoo Finance.
+
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Short, friendly alias so the frontend can fetch `/api/yahoo?...`
+[[redirects]]
+  from = "/api/yahoo"
+  to   = "/.netlify/functions/yahoo"
+  status = 200
+  force  = true
